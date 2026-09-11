@@ -60,6 +60,7 @@ def test_task_configs_compose():
         dev = compose(config_name="train", overrides=["task=libero_wamh3_dev"])
         full = compose(config_name="train", overrides=["task=libero_wamh3"])
     assert dev.model.lora_r == 16 and full.model.lora_r == 128
-    assert dev.train.batch_size * dev.train.grad_accum == 16 and full.train.batch_size == 16
+    assert dev.train.batch_size * dev.train.grad_accum == 128 and full.train.batch_size == 16
+    assert list(dev.model.lora_targets) == list(full.model.lora_targets) and dev.model.lora_dropout == 0.0
     assert len(dev.data.train.dataset_dirs) == 1 and len(full.data.train.dataset_dirs) == 4
-    assert dev.train.save_every == 500 and full.train.save_every == 2000
+    assert dev.train.save_every == 100 and full.train.save_every == 2000

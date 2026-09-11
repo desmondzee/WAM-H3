@@ -64,7 +64,9 @@ class Trainer:
 
     def train(self):
         it, t0, start = iter(self.loader), time.time(), self.step
-        loss_val, acc_parts = None, []
+        loss_val, acc_parts, prev, inc_sq = None, [], None, 0.0
+        params = [p for p in self.dit.parameters() if p.requires_grad]
+        track_var = self.acc.num_processes == 1
         while self.step < self.total_steps:
             try:
                 batch = next(it)
@@ -81,7 +83,16 @@ class Trainer:
                     loss, parts = self.model.training_loss(batch)
                 self.acc.backward(loss)
                 acc_parts.append(dict(parts, loss=loss.item()))
+                if track_var:
+                    cur = [p.grad.detach().clone() if p.grad is not None else None for p in params]
+                    inc_sq += sum(float(((c if prev is None else c - q) ** 2).sum()) for c, q in zip(cur, prev or [None] * len(cur)) if c is not None)
+                    prev = cur
                 if self.acc.sync_gradients:
+                    n_acc = len(acc_parts)
+                    g_sq = sum(float((p.grad.detach() ** 2).sum()) for p in params if p.grad is not None) if track_var else 0.0
+                    grad_var = max(n_acc * inc_sq - g_sq, 0.0) if track_var else float("nan")
+                    noise_scale = self.c.batch_size * grad_var / max(g_sq, 1e-12) if track_var else float("nan")
+                    prev, inc_sq = None, 0.0
                     gn = self.acc.clip_grad_norm_(self.dit.parameters(), self.c.max_grad_norm)
                     self.opt.step()
                     self.sched.step()
@@ -100,7 +111,8 @@ class Trainer:
                               f"lr {lr:.2e} {rate:.2f} it/s eta {eta / 60:.1f} min", flush=True)
                         self.log({"train/loss": loss_val, "train/loss_video": parts["loss_video"], "train/loss_action": parts["loss_action"],
                                   "train/loss_video_full_noise": parts["loss_video_full_noise"], "train/grad_norm": float(gn),
-                                  "train/lr": lr, "train/epoch": self.epoch, "train/steps_per_sec": rate}, self.step)
+                                  "train/lr": lr, "train/epoch": self.epoch, "train/steps_per_sec": rate,
+                                  "train/grad_var": grad_var, "train/grad_noise_scale": noise_scale}, self.step)
                     if self.c.save_every and self.step % self.c.save_every == 0:
                         self.save(loss_val)
         if not self.c.save_every or self.step % self.c.save_every:

@@ -81,7 +81,18 @@ def test_trainer_logs_metrics_each_step(tmp_path):
     t.train()
     assert [s for s, _ in seen] == [1, 2, 3]
     assert {"train/loss", "train/loss_video", "train/loss_video_full_noise", "train/loss_action", "train/grad_norm", "train/lr",
-            "train/epoch", "train/steps_per_sec"} <= set(seen[0][1])
+            "train/epoch", "train/steps_per_sec", "train/grad_var", "train/grad_noise_scale"} <= set(seen[0][1])
+
+
+def test_grad_variance_from_accumulation_window(tmp_path):
+    import math
+    model = make(tmp_path, r=4)
+    seen = []
+    t = Trainer(train_cfg(tmp_path, max_steps=2, save_every=0, log_every=1, grad_accum=2, batch_size=1), model, ListDataset(model.cfg, n=4),
+                Accelerator(cpu=True, gradient_accumulation_steps=2), log=lambda d, step: seen.append(d))
+    t.train()
+    for d in seen:
+        assert math.isfinite(d["train/grad_var"]) and d["train/grad_var"] >= 0 and math.isfinite(d["train/grad_noise_scale"])
 
 
 def test_run_training_end_to_end(tmp_path, monkeypatch):

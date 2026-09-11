@@ -2,13 +2,17 @@
 task_name: libero_wamh3_dev
 model:
   lora_r: 16
+  lora_alpha: 16
+  lora_targets: [attn.qkv_proj, attn.out_proj, mlp.fc1, mlp.fc2, adaln_proj.linear]
+  lora_dropout: 0.0
 data:
   train:
     dataset_dirs:
       - ./data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
 train:
   batch_size: 2
-  grad_accum: 8
-  num_workers: 4
-  max_steps: 3000
-  save_every: 500
+  grad_accum: 64
+  num_workers: 8
+  max_steps: 600
+  save_every: 100
+  log_every: 1

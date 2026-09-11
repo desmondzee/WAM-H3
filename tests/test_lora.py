@@ -52,3 +52,9 @@ def test_trainable_checkpoint_roundtrip(cfg, tmp_path):
     assert not torch.allclose(m(**inp, t_groups=tg).hidden, m2(**inp, t_groups=tg).hidden)
     load_trainable(m2, tmp_path / "adapter.safetensors")
     assert torch.allclose(m(**inp, t_groups=tg).hidden, m2(**inp, t_groups=tg).hidden)
+
+
+def test_lora_targets_configurable(cfg):
+    m = apply_lora(WAMH3DiT(cfg), r=4, targets=("attn.qkv_proj",), dropout=0.1)
+    assert sum(1 for mod in m.modules() if hasattr(mod, "lora_A")) == cfg.num_layers + cfg.token_refiner_num_layers
+    assert not hasattr(m.blocks[0].mlp.fc1, "lora_A") and m.blocks[0].attn.qkv_proj.lora_dropout["default"].p == 0.1

@@ -3,6 +3,8 @@ weights_root: ./FL2VA
 tiny: false
 lora_r: 128
 lora_alpha: null
+lora_targets: [attn.qkv_proj, attn.out_proj, mlp.fc1, mlp.fc2, adaln_proj.linear]
+lora_dropout: 0.0
 action_dim: ${data.train.processor.action_output_dim}
 proprio_dim: ${data.train.processor.proprio_output_dim}
 video_size: ${data.train.video_size}
