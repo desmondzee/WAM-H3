@@ -1,1 +1,8 @@
 *.safetensors
+.venv/
+runs/
+data/
+.runtime/
+__pycache__/
+*.pyc
+.pytest_cache/

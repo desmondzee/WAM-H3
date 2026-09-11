@@ -1,0 +1,3 @@
+[submodule "third_party/FasterWAM"]
+	path = third_party/FasterWAM
+	url = https://github.com/desmondzee/FasterWAM
