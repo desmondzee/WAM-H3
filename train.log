@@ -1,9 +1,0 @@
-[2026-09-11 13:13:39,004][datasets][INFO] - PyTorch version 2.10.0 available.
-[2026-09-11 13:13:39,203][root][WARNING] - 'torchcodec' is not available in your platform, falling back to 'pyav' as a default decoder
-[2026-09-11 13:13:39,835][fasterwam.datasets.lerobot.robot_video_dataset][INFO] - Calculating dataset stats for normalization...
-[2026-09-11 13:18:05,162][datasets][INFO] - PyTorch version 2.10.0 available.
-[2026-09-11 13:18:05,404][root][WARNING] - 'torchcodec' is not available in your platform, falling back to 'pyav' as a default decoder
-[2026-09-11 13:18:06,003][fasterwam.datasets.lerobot.robot_video_dataset][INFO] - Calculating dataset stats for normalization...
-[2026-09-11 13:33:02,153][datasets][INFO] - PyTorch version 2.10.0 available.
-[2026-09-11 13:33:02,417][root][WARNING] - 'torchcodec' is not available in your platform, falling back to 'pyav' as a default decoder
-[2026-09-11 13:33:03,035][fasterwam.datasets.lerobot.robot_video_dataset][INFO] - Calculating dataset stats for normalization...
