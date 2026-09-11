@@ -34,7 +34,7 @@ def build_dit(cfg, transformer_dir, device, dtype):
 
 def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, action_video_freq_ratio, text_len,
                  lora_r=None, lora_alpha=None, tiny=False, text_cache_dir=None, load_text_encoder=False,
-                 device=None, dtype="bfloat16", shift=5.0):
+                 device=None, dtype="bfloat16", shift=5.0, video_weight_center=1.0, video_full_noise_prob=0.3):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
     root = Path(weights_root)
@@ -58,4 +58,5 @@ def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, 
     if load_text_encoder:
         from .text_encoder import TextEncoder
         text_encoder = TextEncoder.from_pretrained(root, device="cpu")
-    return WAMH3(cfg, dit, vae, text_cache_dir=text_cache_dir, text_encoder=text_encoder, shift=shift)
+    return WAMH3(cfg, dit, vae, text_cache_dir=text_cache_dir, text_encoder=text_encoder, shift=shift,
+                 video_weight_center=video_weight_center, video_full_noise_prob=video_full_noise_prob)

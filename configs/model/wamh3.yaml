@@ -13,3 +13,5 @@ text_cache_dir: ${data.train.text_embedding_cache_dir}
 load_text_encoder: false
 dtype: bfloat16
 shift: 5.0
+video_weight_center: 1.0
+video_full_noise_prob: 0.3

@@ -93,3 +93,27 @@ def test_loss_uses_independent_video_and_action_sigmas(cfg, monkeypatch):
     tg = seen["t_groups"]
     assert (tg[:, 0] == 1).all() and torch.allclose(tg[:, 1], torch.full((2,), cfg.obs_t))
     assert not torch.equal(tg[:, 2], tg[:, 3])
+
+
+def test_video_weight_peaks_at_full_noise():
+    f = FlowSchedule(shift=5.0, weight_center=1.0, subtract_min=False)
+    grid = f.sample_sigma(20000, "cpu", torch.Generator().manual_seed(0))
+    w = f.training_weight(grid)
+    assert (w > 0).all() and w.max() <= f.training_weight(torch.ones(1))[0] and f.training_weight(torch.ones(1))[0] > 1.0
+    assert abs(w.mean() - 1.0) < 0.05
+
+
+def test_video_sigma_hits_one_with_full_noise_prob(cfg, monkeypatch):
+    m = WAMH3DiT(cfg)
+    seen = {}
+    captured = m.forward
+
+    def spy(*a, **k):
+        seen["t_groups"] = k["t_groups"]
+        return captured(*a, **k)
+
+    monkeypatch.setattr(m, "forward", spy)
+    training_loss(m, batch(cfg, B=8), FlowSchedule(), FlowSchedule(), full_noise_prob=1.0)
+    assert (seen["t_groups"][:, 2] == 0).all()
+    training_loss(m, batch(cfg, B=8), FlowSchedule(), FlowSchedule(), full_noise_prob=0.0)
+    assert (seen["t_groups"][:, 2] > 0).all()

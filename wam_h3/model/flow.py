@@ -6,15 +6,15 @@ def _phi(u, shift):
 
 
 class FlowSchedule:
-    def __init__(self, shift=5.0, num_train_timesteps=1000, eps=1e-10):
-        self.shift, self.n, self.eps = float(shift), int(num_train_timesteps), eps
+    def __init__(self, shift=5.0, num_train_timesteps=1000, eps=1e-10, weight_center=0.5, subtract_min=True):
+        self.shift, self.n, self.eps, self.center = float(shift), int(num_train_timesteps), eps, float(weight_center)
         u = torch.linspace(1.0, 0.0, self.n + 1, dtype=torch.float64)[:-1]
         y = self._bump(_phi(u, self.shift))
-        self.y_min = float(y.min())
+        self.y_min = float(y.min()) if subtract_min else 0.0
         self.norm = float((y - self.y_min).mean())
 
     def _bump(self, sigma):
-        return torch.exp(-2.0 * (sigma.to(torch.float64) - 0.5) ** 2)
+        return torch.exp(-2.0 * (sigma.to(torch.float64) - self.center) ** 2)
 
     def sample_sigma(self, B, device, generator=None):
         return _phi(torch.rand(B, device=device, generator=generator), self.shift)

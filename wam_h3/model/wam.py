@@ -13,11 +13,14 @@ from .text_encoder import collate_instructions
 
 
 class WAMH3(nn.Module):
-    def __init__(self, cfg, dit, vae, text_cache_dir=None, text_encoder=None, shift=5.0):
+    def __init__(self, cfg, dit, vae, text_cache_dir=None, text_encoder=None, shift=5.0, video_weight_center=1.0,
+                 video_full_noise_prob=0.3):
         super().__init__()
         self.cfg, self.dit, self.vae = cfg, dit, vae
         self.text_cache_dir, self.text_encoder = text_cache_dir, text_encoder
-        self.sched_v, self.sched_a = FlowSchedule(shift), FlowSchedule(shift)
+        self.sched_v = FlowSchedule(shift, weight_center=video_weight_center, subtract_min=False)
+        self.sched_a = FlowSchedule(shift)
+        self.video_full_noise_prob = video_full_noise_prob
         self._prompts = {}
 
     @property
@@ -59,7 +62,7 @@ class WAMH3(nn.Module):
         return out
 
     def training_loss(self, s):
-        return training_loss(self.dit, self.build_inputs(s), self.sched_v, self.sched_a)
+        return training_loss(self.dit, self.build_inputs(s), self.sched_v, self.sched_a, full_noise_prob=self.video_full_noise_prob)
 
     @torch.no_grad()
     def infer_action_one_pass_future_cache(self, input_image, proprio=None, prompt=None, context=None, context_mask=None,

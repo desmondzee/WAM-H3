@@ -7,11 +7,13 @@ def _masked_mean(per_row, is_pad):
     return (per_row * valid).sum(1) / valid.sum(1).clamp(min=1.0)
 
 
-def training_loss(dit, batch, sched_v, sched_a, generator=None):
+def training_loss(dit, batch, sched_v, sched_a, generator=None, full_noise_prob=0.0):
     cfg = dit.cfg
     video, action = batch["video_rows"], batch["action"]
     B, dev = video.shape[0], video.device
     sv, sa = sched_v.sample_sigma(B, dev, generator), sched_a.sample_sigma(B, dev, generator)
+    if full_noise_prob > 0:
+        sv = torch.where(torch.rand(B, device=dev, generator=generator) < full_noise_prob, torch.ones_like(sv), sv)
     nv = torch.randn(video.shape, device=dev, generator=generator, dtype=video.dtype)
     na = torch.randn(action.shape, device=dev, generator=generator, dtype=action.dtype)
     t_groups = torch.stack([torch.ones_like(sv), torch.full_like(sv, cfg.obs_t), 1 - sv, 1 - sa], dim=1)
