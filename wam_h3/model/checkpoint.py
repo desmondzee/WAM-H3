@@ -48,4 +48,3 @@ def load_trainable(model, path):
     missing = trainable - set(sd)
     if missing or report.unexpected_keys:
         raise RuntimeError(f"trainable checkpoint mismatch: missing={sorted(missing)[:5]} unexpected={report.unexpected_keys[:5]}")
-    return torch.tensor(0)

@@ -4,7 +4,7 @@ import pytest
 import torch
 from transformers import AutoTokenizer
 
-from wam_h3.model.text_encoder import collate_instructions, presentation_t2va
+from wam_h3.model.text_encoder import RETAINED_LAYERS, TextEncoder, collate_instructions, presentation_t2va
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,3 +33,9 @@ def test_collate_pads_and_masks():
 def test_collate_rejects_overlong():
     with pytest.raises(ValueError):
         collate_instructions([torch.ones(7, 8)], text_len=6)
+
+
+def test_config_truncates_language_model_to_retained_layers():
+    cfg = TextEncoder.load_config(ROOT / "FL2VA")
+    assert cfg.text_config.num_hidden_layers == RETAINED_LAYERS == 50
+    assert cfg.text_config.hidden_size == 5120 and cfg.vision_config.depth == 27

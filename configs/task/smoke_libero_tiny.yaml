@@ -8,6 +8,7 @@ data:
   train:
     dataset_dirs:
       - ./data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
+    text_embedding_cache_dir: ./data/text_embeds/smoke
 train:
   batch_size: 1
   grad_accum: 1

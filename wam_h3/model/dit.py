@@ -59,7 +59,7 @@ class WAMH3DiT(nn.Module):
                         ("ctx_rows", torch.cat([torch.arange(0, lay.action.start), torch.arange(lay.video.start, lay.video.stop)])),
                         ("action_rows", torch.arange(lay.action.start, lay.action.stop))]:
             self.register_buffer(name, t.to(device), persistent=False)
-        self.rope.inv_freq.data = self.rope._inv_freq(device)
+        self.rope.inv_freq.data = self.rope._inv_freq(device).to(self.rope.inv_freq.dtype)
 
     def freqs(self, rows=None):
         f = self.rope(self.position_ids[None])

@@ -25,32 +25,38 @@ class Trainer:
         self.c, self.acc, self.model = c, acc, model
         self.out = Path(cfg.output_dir)
         self.trainable = {n for n, p in model.dit.named_parameters() if p.requires_grad}
+        self.step = self.epoch = self.batch_in_epoch = 0
+        if c.resume:
+            st = model.load_checkpoint(c.resume)
+            self.step, self.epoch, self.batch_in_epoch = st["step"], st["epoch"], st["batch_in_epoch"]
         model.dit.train()
         model.dit.grad_checkpoint = bool(c.get("grad_checkpoint", True))
-        self.dit = model.dit = acc.prepare(model.dit)
-        self.opt = torch.optim.AdamW([p for p in self.dit.parameters() if p.requires_grad], lr=c.lr,
-                                     weight_decay=c.weight_decay, betas=tuple(c.betas))
+        opt = torch.optim.AdamW([p for p in model.dit.parameters() if p.requires_grad], lr=c.lr,
+                                weight_decay=c.weight_decay, betas=tuple(c.betas))
+        self.dit, self.opt = acc.prepare(model.dit, opt)
+        model.dit = self.dit
         self.sampler = ResumableEpochSampler(dataset, cfg.seed, c.batch_size, acc.num_processes)
         self.loader = acc.prepare(DataLoader(dataset, batch_size=c.batch_size, sampler=self.sampler,
                                              num_workers=c.num_workers, pin_memory=torch.cuda.is_available()))
         per_epoch = ceil(ceil(len(dataset) / (c.batch_size * acc.num_processes)) / c.grad_accum)
         self.total_steps = int(c.max_steps) if c.max_steps else per_epoch * c.num_epochs
         self.sched = build_scheduler(self.opt, self.total_steps, c.warmup_ratio, c.min_lr_ratio)
-        self.step = self.epoch = self.batch_in_epoch = 0
         if c.resume:
-            st = model.load_checkpoint(c.resume)
-            self.step, self.epoch, self.batch_in_epoch = st["step"], st["epoch"], st["batch_in_epoch"]
             self.sampler.set_epoch(self.epoch)
             self.sampler.set_resume_batch_offset(self.batch_in_epoch)
             for _ in range(self.step):
                 self.sched.step()
 
     def save(self, loss):
-        sd = self.acc.get_state_dict(self.dit)
+        sd = {}
+        for n, p in self.dit.named_parameters():
+            if n in self.trainable:
+                t = p.detach()
+                sd[n] = (t.full_tensor() if hasattr(t, "full_tensor") else t).cpu().contiguous()
         if self.acc.is_main_process:
             d = self.out / "checkpoints" / f"step_{self.step:06d}"
             d.mkdir(parents=True, exist_ok=True)
-            save_file({k: v.detach().cpu().contiguous() for k, v in sd.items() if k in self.trainable}, str(d / "adapter.safetensors"))
+            save_file(sd, str(d / "adapter.safetensors"))
             (d / "trainer_state.json").write_text(json.dumps(dict(
                 step=self.step, epoch=self.epoch, batch_in_epoch=self.batch_in_epoch, loss=loss,
                 lr=self.opt.param_groups[0]["lr"]), indent=1))

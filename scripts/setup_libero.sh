@@ -5,8 +5,10 @@ cd "$(dirname "$0")/.."
 clone() { [ -d "$3/.git" ] || git clone "$1" "$3"; git -C "$3" checkout -q "$2"; }
 clone https://github.com/Lifelong-Robot-Learning/LIBERO.git 8f1084e third_party/LIBERO
 clone https://github.com/sylvestf/LIBERO-plus.git 4976dc3 third_party/LIBERO-plus
-uv pip install robosuite==1.4.0 bddl==1.0.1 easydict future==1.0.0 cloudpickle==2.1.0 gym==0.25.2 \
-  matplotlib opencv-python-headless mujoco==3.3.2 robomimic==0.2.0 thop h5py
+uv pip install cmake==3.31.10 wheel
+uv pip install robosuite==1.4.0 bddl==1.0.1 easydict==1.9 future==1.0.0 cloudpickle==2.1.0 gym==0.25.2 \
+  matplotlib==3.10.9 opencv-python-headless==4.11.0.86 mujoco==3.3.2 robomimic==0.2.0 thop==0.1.1.post2209072238 \
+  h5py==3.14.0 scikit-image==0.25.2
 ASSETS=third_party/LIBERO-plus/libero/libero/assets
 if [ ! -d "$ASSETS" ]; then
   uv run hf download Sylvest/LIBERO-plus assets.zip --repo-type dataset --local-dir third_party/LIBERO-plus/libero/libero

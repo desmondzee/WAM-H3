@@ -15,7 +15,6 @@ FRESH = ("action_in", "proprio_in", "final_layer.action_out")
 def build_dit(cfg, transformer_dir, device, dtype):
     with torch.device("meta"):
         dit = WAMH3DiT(cfg)
-    dit.to_empty(device=device)
     report = load_pretrained(dit, transformer_dir, dtype=dtype, device=device)
     expected = {k for k in report.missing if k.startswith(FRESH)}
     if report.missing != expected:
@@ -23,12 +22,12 @@ def build_dit(cfg, transformer_dir, device, dtype):
     for name in FRESH:
         m = dit.get_submodule(name) if name != "proprio_in" or dit.proprio_in is not None else None
         if m is not None:
+            m.to_empty(device=device)
             m.reset_parameters()
+            m.to(dtype)
     torch.nn.init.zeros_(dit.final_layer.action_out.weight)
     torch.nn.init.zeros_(dit.final_layer.action_out.bias)
-    dit.init_buffers()
-    for p in dit.parameters():
-        p.data = p.data.to(dtype)
+    dit.init_buffers(device)
     return dit
 
 

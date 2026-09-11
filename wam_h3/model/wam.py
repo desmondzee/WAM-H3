@@ -46,10 +46,11 @@ class WAMH3(nn.Module):
     def build_inputs(self, s, video=True):
         cfg, dev, dt = self.cfg, self.device, self.torch_dtype
         frames = (s["video"].to(dev, torch.float32) + 1) / 2
-        out = dict(text=s["context"].to(dev, dt), text_valid=s["context_mask"].to(dev).bool(),
-                   obs_rows=patchify_video(self.vae.encode_image(frames[:, :, 0])).to(dt))
-        if video:
-            out["video_rows"] = patchify_video(self.vae.encode_clip(frames)).to(dt)
+        with torch.autocast(dev.type, enabled=False):
+            out = dict(text=s["context"].to(dev, dt), text_valid=s["context_mask"].to(dev).bool(),
+                       obs_rows=patchify_video(self.vae.encode_image(frames[:, :, 0])).to(dt))
+            if video:
+                out["video_rows"] = patchify_video(self.vae.encode_clip(frames)).to(dt)
         p = s.get("proprio")
         out["proprio"] = None if p is None else (p[:, 0] if p.ndim == 3 else p).to(dev, dt)
         if "action" in s:

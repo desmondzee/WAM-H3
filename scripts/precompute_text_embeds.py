@@ -51,7 +51,8 @@ def main():
         return
     from wam_h3.model.text_encoder import TextEncoder
     enc = TextEncoder.from_pretrained(a.weights_root, device=a.device)
-    for p, e in zip(todo, enc.encode(todo)):
+    for p in todo:
+        e = enc.encode([p])[0]
         save_embedding(a.cache_dir, p, e)
         print(f"{e.shape[0]:3d} tokens  {p}")
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer, Qwen3VLModel
+from transformers import AutoTokenizer, Qwen3VLConfig, Qwen3VLModel
 
 RETAINED_LAYERS = 50
 
@@ -28,11 +28,16 @@ class TextEncoder(nn.Module):
         self.model, self.tokenizer = model, tokenizer
         self.model.language_model.norm = nn.Identity()
 
+    @staticmethod
+    def load_config(root):
+        cfg = Qwen3VLConfig.from_pretrained(Path(root) / "text_encoder")
+        cfg.text_config.num_hidden_layers = RETAINED_LAYERS
+        return cfg
+
     @classmethod
     def from_pretrained(cls, root, device="cpu", dtype=torch.bfloat16):
         root = Path(root)
-        model = Qwen3VLModel.from_pretrained(root / "text_encoder", dtype=dtype, device_map=device,
-                                             num_hidden_layers=RETAINED_LAYERS)
+        model = Qwen3VLModel.from_pretrained(root / "text_encoder", config=cls.load_config(root), dtype=dtype, device_map=device)
         return cls(model.eval(), AutoTokenizer.from_pretrained(root / "tokenizer"))
 
     @torch.no_grad()
