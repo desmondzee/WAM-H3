@@ -1,0 +1,15 @@
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+mixed_precision: bf16
+num_machines: 1
+num_processes: 8
+use_cpu: false
+fsdp_config:
+  fsdp_version: 2
+  fsdp_reshard_after_forward: true
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: DiTBlock,TokenRefinerBlock
+  fsdp_activation_checkpointing: false
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_offload_params: false
+  fsdp_cpu_ram_efficient_loading: false

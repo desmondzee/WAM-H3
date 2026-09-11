@@ -55,7 +55,7 @@ class WAMH3DiT(nn.Module):
     def init_buffers(self, device=None):
         lay = self.layout
         device = device or self.condition_proj.weight.device
-        for name, t in [("position_ids", lay.position_ids), ("row_group", lay.row_group), ("row_tag", lay.row_tag),
+        for name, t in [("position_ids", lay.position_ids.float()), ("row_group", lay.row_group), ("row_tag", lay.row_tag),
                         ("ctx_rows", torch.cat([torch.arange(0, lay.action.start), torch.arange(lay.video.start, lay.video.stop)])),
                         ("action_rows", torch.arange(lay.action.start, lay.action.stop))]:
             self.register_buffer(name, t.to(device), persistent=False)
@@ -97,8 +97,12 @@ class WAMH3DiT(nn.Module):
         idx, fidx = self.row_index(B)
         freqs = self.freqs()
         mask = lay.full_mask(text_valid) if mask is None else mask
+        ckpt = getattr(self, "grad_checkpoint", False) and self.training and torch.is_grad_enabled()
         for blk in self.blocks:
-            x, _ = blk(x, t_emb, idx, freqs, mask)
+            if ckpt:
+                x, _ = torch.utils.checkpoint.checkpoint(blk, x, t_emb, idx, freqs, mask, use_reentrant=False)
+            else:
+                x, _ = blk(x, t_emb, idx, freqs, mask)
         h = self.final_layer(x, t_emb, fidx)
         return DiTOutput(self.final_layer.video_out(h[:, lay.video]), self.final_layer.action_out(h[:, lay.action]), x)
 
