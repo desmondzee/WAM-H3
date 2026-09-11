@@ -63,6 +63,7 @@ class SequenceLayout:
         m[self.video, ctx] = True
         m[self.video, self.video] = True
         m[self.action, :] = True
+        m[self.action, self.video] = bool(cfg.action_sees_video)
         self._base_mask = m
 
     def base_mask(self):

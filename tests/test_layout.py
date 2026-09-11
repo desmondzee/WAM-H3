@@ -97,3 +97,10 @@ def test_action_query_mask(cfg):
     q = lay.action_query_mask(valid)
     assert q.shape == (1, 1, cfg.action_horizon, lay.N)
     assert torch.equal(q[0, 0], lay.full_mask(valid)[0, 0, lay.action])
+
+
+def test_base_mask_can_hide_video_from_actions(cfg):
+    from dataclasses import replace
+    lay = SequenceLayout(replace(cfg, action_sees_video=False))
+    m = lay.base_mask()
+    assert not m[lay.action, lay.video].any() and m[lay.action, lay.text].all() and m[lay.action, lay.action].all()
