@@ -11,13 +11,14 @@ def test_lora_targets_and_trainable_set(cfg):
     n_lora = sum(1 for mod in m.modules() if hasattr(mod, "lora_A"))
     assert n_lora == 5 * cfg.num_layers + 4 * cfg.token_refiner_num_layers
     assert not hasattr(m.final_layer.adaln_proj.linear, "lora_A")
+    assert not hasattr(m.final_layer.adaln_proj.linear, "lora_A")
     trainable = {n for n, p in m.named_parameters() if p.requires_grad}
     assert trainable
     for n in trainable:
         assert ".lora_" in n or n.startswith(HEADS), n
     assert {n for n in trainable if n.startswith(HEADS)} >= {"action_in.weight", "proprio_in.weight",
-                                                            "final_layer.action_out.weight",
-                                                            "final_layer.adaln_proj.linear.weight"}
+                                                            "final_layer.action_out.weight"}
+    assert not m.final_layer.adaln_proj.linear.weight.requires_grad
     assert not m.blocks[0].attn.qkv_proj.base_layer.weight.requires_grad
 
 

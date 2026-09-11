@@ -17,13 +17,18 @@ def test_meta_build_matches_eager_build(tmp_path):
     cfg = WAMH3Config.tiny()
     ref = WAMH3DiT(cfg)
     sd = {k: v.contiguous() for k, v in ref.state_dict().items() if not k.startswith(("action_in", "proprio_in", "final_layer.action_out"))}
+    sd["audio_patch_proj.weight"], sd["audio_patch_proj.bias"] = torch.randn(cfg.hidden_size, 32), torch.randn(cfg.hidden_size)
     (tmp_path / "transformer").mkdir()
     save_file(sd, str(tmp_path / "transformer/model.safetensors"))
     dit = build_dit(cfg, tmp_path / "transformer", device="cpu", dtype=torch.float32)
     assert not any(p.is_meta for p in dit.parameters()) and not any(b.is_meta for b in dit.buffers())
     assert torch.equal(dit.blocks[1].mlp.fc1.weight, ref.blocks[1].mlp.fc1.weight)
     assert torch.equal(dit.position_ids, ref.position_ids) and torch.equal(dit.rope.inv_freq, ref.rope.inv_freq)
-    assert (dit.final_layer.action_out.weight == 0).all() and dit.action_in.weight.abs().sum() > 0
+    assert (dit.final_layer.action_out.weight == 0).all()
+    assert torch.equal(dit.action_in.weight, ref.state_dict()["action_in.weight"][:, : cfg.action_dim]) is False
+    assert torch.equal(dit.action_in.bias, sd["audio_patch_proj.bias"]) and torch.equal(dit.proprio_in.bias, sd["audio_patch_proj.bias"])
+    assert torch.equal(dit.action_in.weight, sd["audio_patch_proj.weight"][:, : cfg.action_dim])
+    assert torch.equal(dit.proprio_in.weight, sd["audio_patch_proj.weight"][:, : cfg.proprio_dim])
     ref.load_state_dict({k: v for k, v in dit.state_dict().items() if k.startswith(("action_in", "proprio_in", "final_layer.action_out"))}, strict=False)
     inp, tg = inputs(cfg), torch.rand(2, 4)
     assert torch.allclose(dit(**inp, t_groups=tg).hidden, ref(**inp, t_groups=tg).hidden, atol=1e-5)

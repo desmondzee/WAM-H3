@@ -55,7 +55,7 @@ def test_loss_finite_and_split(cfg):
     m = WAMH3DiT(cfg)
     loss, parts = training_loss(m, batch(cfg), FlowSchedule(), FlowSchedule())
     assert torch.isfinite(loss) and loss.requires_grad
-    assert set(parts) == {"loss_video", "loss_action"}
+    assert set(parts) == {"loss_video", "loss_action", "loss_video_full_noise"}
     assert abs(loss.item() - parts["loss_video"] - parts["loss_action"]) < 1e-5
 
 
@@ -116,3 +116,11 @@ def test_video_sigma_hits_one_with_full_noise_prob(cfg, monkeypatch):
     assert (seen["t_groups"][:, 2] == 0).all()
     training_loss(m, batch(cfg, B=8), FlowSchedule(), FlowSchedule(), full_noise_prob=0.0)
     assert (seen["t_groups"][:, 2] > 0).all()
+
+
+def test_loss_reports_full_noise_video_bucket(cfg):
+    m = WAMH3DiT(cfg)
+    _, parts = training_loss(m, batch(cfg, B=4), FlowSchedule(), FlowSchedule(), full_noise_prob=1.0)
+    assert abs(parts["loss_video_full_noise"] - parts["loss_video"]) < 1e-6
+    _, parts = training_loss(m, batch(cfg, B=4), FlowSchedule(), FlowSchedule(), full_noise_prob=0.0)
+    assert parts["loss_video_full_noise"] != parts["loss_video_full_noise"]

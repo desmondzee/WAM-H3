@@ -50,7 +50,7 @@ def test_dataset_sample_layout(tmp_path):
     assert s["action"].shape == (32, 7) and s["proprio"].shape == (8,)
     assert s["context"].shape == (64, 5120) and s["context_mask"].shape == (64,)
     n = int(s["context_mask"].sum())
-    assert 0 < n < 64 and (s["context"][n:] == 0).all()
+    assert 0 < n < 64 and (s["context"][:64 - n] == 0).all() and s["context_mask"][-1]
     assert s["image_is_pad"].shape == (5,) and s["action_is_pad"].shape == (32,)
     assert (tmp_path / "dataset_stats.json").exists()
     assert json.loads((tmp_path / "dataset_stats.json").read_text())

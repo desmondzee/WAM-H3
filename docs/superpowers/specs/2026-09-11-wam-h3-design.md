@@ -9,7 +9,7 @@ Decisions already made with the user:
 - **Asymmetric attention at all 50 layers**: actions read text/obs/video everywhere; nothing reads actions. This makes the one-pass K/V cache *exact*.
 - **Video and action flow time independent**, sampled separately (FasterWAM phi-shift sampler, shift 5 for both).
 - **Clip = 5 frames** at env steps 0,8,16,24,32 spanning 32 actions (H3's VAE takes 17k+5 frames → 2 latents: latent0 = frame0, latent1 = frames 1–4).
-- **Fine-tuning**: LoRA on `qkv_proj, out_proj, fc1, fc2, adaln_proj.linear` of all 50 blocks + token refiner; full training of `action_in, action_out, proprio_in, final_layer.adaln_proj`. Rank is a config knob (`lora.r`): **dev = rank 16 on a single GPU** to prove the architecture trains and the pipeline works end to end; **final = rank 128 (α=128)** on 8 GPUs (1.19B LoRA params, ~16 GB/GPU under FSDP). Same target set in both so the dev run exercises the real code path.
+- **Fine-tuning**: LoRA on `qkv_proj, out_proj, fc1, fc2, adaln_proj.linear` of all 50 blocks + token refiner; full training of `action_in, action_out, proprio_in` (`action_in`/`proprio_in` are initialised from the pretrained `audio_patch_proj` columns and bias; `final_layer.adaln_proj` stays frozen because it also modulates the frozen `video_out`). Rank is a config knob (`lora.r`): **dev = rank 16 on a single GPU** to prove the architecture trains and the pipeline works end to end; **final = rank 128 (α=128)** on 8 GPUs (1.19B LoRA params, ~16 GB/GPU under FSDP). Same target set in both so the dev run exercises the real code path.
 - **Hardware**: dev on 1× 80 GB (no FSDP: 66 GB bf16 base + ~2 GB rank-16 LoRA/optimizer + <1 GB activations at batch 2 ≈ 69 GB); final on 8× 80 GB, one node, FSDP full-shard, ~80 GPU-hours per LIBERO run (≈10 h).
 - **Benchmarks, in order**: LIBERO (4 suites) → LIBERO-Plus (same checkpoint, FasterWAM's `sim_libero_plus` manager config, 15% task sampling) → RoboTwin later.
 - **Weights are saved** every `save_every` steps and at the end of training as trainable-only `adapter.safetensors` + `trainer_state.json` + `dataset_stats.json` + resolved `config.yaml`; eval loads them via `load_checkpoint`.
@@ -23,7 +23,7 @@ Decisions already made with the user:
 
 **Sequence (per sample, batched `[B, N, 5376]`)**: `[T text (pad to 64) | S obs rows (98 @224×448, 120 @384×320) | P proprio (1) | A actions (32) | V future video (2 latents × rows/frame)]`, N ≈ 390 (LIBERO) / 460 (RoboTwin). Replaces DiffSynth's `[1,S,C]` + `cu_seqlens` varlen loop with true batching, one shared boolean `[N,N]` mask and per-sample text key padding.
 
-**Mask** (query reads key): T→{T,S}; S→{T,S}; V→{T,S,V}; A→{T,S,V,A}. Pad text keys masked for all queries; pad text queries still see S (no NaN).
+**Mask** (query reads key): T→{T,S,V}; S→{T,S,V}; V→{T,S,V}; A→{T,S,V,A}; nothing reads A (the only restriction the exact cache needs). `ctx_sees_video=false` gives FasterWAM's first-frame-causal variant (T,S→{T,S}) for an A/B. Pad text keys masked for all queries; the text block is right-aligned so the last instruction token is adjacent to the video origin, as in H3.
 
 **Per-row flow time / AdaLN** — 4 timestep groups per sample, modulation index `(b*4+g)*3+tag` so the pretrained `adaln_proj` layout `[modality][6 chunks][hidden]` loads unchanged:
 
@@ -35,7 +35,7 @@ Decisions already made with the user:
 | V | 1 − σ_v | 0 |
 | A | 1 − σ_a | 2 |
 
-**RoPE (t,h,w float)**: text t=0..63; obs t=64 + `_frame_grid`; proprio t=64, h=0, w=w_grid[-1]; video latent k at 64 + `_video_t_grid(k)` (spans (1,4,4,4,4)×5/3); action j at 64 + (j/8)·5/3, h=0, w=w_grid[-1]. Actions and video share the t axis → explicit temporal alignment.
+**RoPE (t,h,w float)**: text t=0..63; obs t=64 + `_frame_grid`; proprio t=64, h=0, w=w_grid[0] (H3's audio channel-0 slot); video latent k at 64 + `_video_t_grid(k)` (spans (1,4,4,4,4)×5/3); action j at 64 + (j/8)·5/3, h=0, w=w_grid[-1]. Actions and video share the t axis → explicit temporal alignment.
 
 **Loss**: MSE on V rows excluding latent 0 (a copy of the obs rows; FasterWAM also drops frame 0), masked by `image_is_pad`, × weight_v(σ_v) + MSE on A rows (masked by `action_is_pad`) × weight_a(σ_a), λ=1/1. Convention boundary: scheduler σ∈[0,1] (1 = noise), DiT t = 1−σ, DiT output negated to match target `noise − x`.
 
@@ -119,6 +119,7 @@ Reference sources: `/private/tmp/claude-501/-Users-desmondzee-Hardware-H3-WAM/da
 17. `scripts/train_fsdp.sh 8 task=libero_wamh3` (rank 128, batch 16 × 8, 21,700 steps, `save_every 2000` + final); LIBERO 4 suites + LIBERO-Plus on the final checkpoint. If OOM at batch 16: `gradient_accumulation_steps: 2, batch_size: 8`.
 
 ### Phase 6 — later
+17b. Ablation: feed the episode's first frame through Qwen3-VL once (FL2VA `<Picture 1>` presentation, ~105 extra text-block rows tagged 0) for semantic grounding; needs per-row tags from the cache and a two-GPU eval worker (66 GB encoder + 66 GB DiT).
 18. RoboTwin: `deploy_policy.py`, `scripts/eval_robotwin.sh` (symlink `RoboTwin/policy/wamh3_policy -> wam_h3/eval/robotwin_policy`), replan 28, `configs/task/robotwin_wamh3.yaml`. Risk: FasterWAM's RoboTwin env pins torch 2.4.1 — rebuild on 2.10; fallback is a model-server process.
 19. `modulation_cache.py` + test `forward(mod_override) == forward()`; drops 13B AdaLN weights from inference.
 

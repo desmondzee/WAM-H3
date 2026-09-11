@@ -22,6 +22,9 @@ def training_loss(dit, batch, sched_v, sched_a, generator=None, full_noise_prob=
     lv = F.mse_loss(-out.video.float(), sched_v.training_target(video, nv).float(), reduction="none").mean(-1)
     la = F.mse_loss(-out.action.float(), sched_a.training_target(action, na).float(), reduction="none").mean(-1)
     F_ = cfg.frame_rows
-    lv = (_masked_mean(lv[:, F_:], batch["image_is_pad"][:, 1:].repeat_interleave(F_, dim=1)) * sched_v.training_weight(sv)).mean()
+    lv = _masked_mean(lv[:, F_:], batch["image_is_pad"][:, 1:].repeat_interleave(F_, dim=1)) * sched_v.training_weight(sv)
+    full = sv >= 1.0
+    lv_full = lv[full].mean().item() if full.any() else float("nan")
+    lv = lv.mean()
     la = (_masked_mean(la, batch["action_is_pad"]) * sched_a.training_weight(sa)).mean()
-    return lv + la, {"loss_video": lv.item(), "loss_action": la.item()}
+    return lv + la, {"loss_video": lv.item(), "loss_action": la.item(), "loss_video_full_noise": lv_full}

@@ -25,20 +25,25 @@ def build_dit(cfg, transformer_dir, device, dtype):
             m.to_empty(device=device)
             m.reset_parameters()
             m.to(dtype)
-    torch.nn.init.zeros_(dit.final_layer.action_out.weight)
-    torch.nn.init.zeros_(dit.final_layer.action_out.bias)
+    with torch.no_grad():
+        for m in (dit.action_in, dit.proprio_in):
+            if m is not None and report.audio:
+                m.weight.copy_(report.audio["weight"][:, : m.in_features])
+                m.bias.copy_(report.audio["bias"])
+        dit.final_layer.action_out.weight.zero_()
+        dit.final_layer.action_out.bias.zero_()
     dit.init_buffers(device)
     return dit
 
 
 def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, action_video_freq_ratio, text_len,
                  lora_r=None, lora_alpha=None, tiny=False, text_cache_dir=None, load_text_encoder=False,
-                 device=None, dtype="bfloat16", shift=5.0, video_weight_center=1.0, video_full_noise_prob=0.3):
+                 device=None, dtype="bfloat16", shift=5.0, video_weight_center=1.0, video_full_noise_prob=0.3, ctx_sees_video=True):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
     root = Path(weights_root)
     n_video = (num_frames - 1) // action_video_freq_ratio + 1
-    dims = dict(action_dim=action_dim, proprio_dim=proprio_dim, action_horizon=num_frames - 1, text_len=text_len,
+    dims = dict(action_dim=action_dim, proprio_dim=proprio_dim, action_horizon=num_frames - 1, text_len=text_len, ctx_sees_video=ctx_sees_video,
                 latent_h=video_size[0] // 16, latent_w=video_size[1] // 16, num_video_latents=((n_video - 5) // 17) * 5 + 2)
     if tiny:
         cfg = WAMH3Config.tiny(text_dim=5120, **dims)

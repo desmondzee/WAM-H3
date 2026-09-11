@@ -45,7 +45,7 @@ def test_position_ids(cfg):
     assert (p[lay.obs, 0] == L).all()
     frame = torch.tensor([[0, 0], [0, 16], [16, 0], [16, 16]], dtype=p.dtype)
     assert torch.equal(p[lay.obs, 1:], frame)
-    assert torch.equal(p[lay.proprio], torch.tensor([[L, 0, 16]], dtype=p.dtype))
+    assert torch.equal(p[lay.proprio], torch.tensor([[L, 0, 0]], dtype=p.dtype))
     vt = p[lay.video, 0].view(cfg.num_video_latents, cfg.frame_rows)[:, 0]
     assert torch.allclose(vt, torch.tensor([L, L + 5 / 3], dtype=p.dtype))
     assert torch.equal(p[lay.video, 1:].view(-1, cfg.frame_rows, 2)[1], frame)
@@ -64,10 +64,18 @@ def test_base_mask_rules(cfg):
     assert not m[lay.video, lay.action].any()
     assert m[lay.action].all()
     assert m[lay.video, lay.text].all() and m[lay.video, lay.obs].all() and m[lay.video, lay.video].all()
-    assert not m[lay.text, lay.video].any() and not m[lay.obs, lay.video].any()
+    assert m[lay.text, lay.video].all() and m[lay.obs, lay.video].all()
     assert m[lay.text, lay.text].all() and m[lay.text, lay.obs].all() and m[lay.text, lay.proprio].all()
     assert m[lay.obs, lay.text].all() and m[lay.obs, lay.obs].all()
     assert m.any(dim=1).all()
+
+
+def test_base_mask_can_hide_video_from_context(cfg):
+    from dataclasses import replace
+    lay = SequenceLayout(replace(cfg, ctx_sees_video=False))
+    m = lay.base_mask()
+    assert not m[lay.text, lay.video].any() and not m[lay.obs, lay.video].any() and not m[lay.proprio, lay.video].any()
+    assert m[lay.video, lay.text].all() and m[lay.action].all() and not m[:lay.action.start, lay.action].any()
 
 
 def test_full_mask_pads_text_keys(cfg):

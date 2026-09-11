@@ -49,7 +49,7 @@ class SequenceLayout:
         p[self.text, 0] = torch.arange(L, dtype=torch.float64)
         p[self.obs, 0] = float(L)
         p[self.obs, 1:] = frame
-        p[self.proprio] = torch.tensor([float(L), 0.0, float(w_grid[-1])], dtype=torch.float64)
+        p[self.proprio] = torch.tensor([float(L), 0.0, float(w_grid[0])], dtype=torch.float64)
         p[self.video, 0] = video_t_grid(K, float(L)).repeat_interleave(F)
         p[self.video, 1:] = frame.repeat(K, 1)
         p[self.action, 0] = L + torch.arange(A, dtype=torch.float64) / cfg.actions_per_frame * FRAME_RESCALE
@@ -59,6 +59,7 @@ class SequenceLayout:
         m = torch.zeros(self.N, self.N, dtype=torch.bool)
         ctx = slice(0, self.action.start)
         m[ctx, ctx] = True
+        m[ctx, self.video] = bool(cfg.ctx_sees_video)
         m[self.video, ctx] = True
         m[self.video, self.video] = True
         m[self.action, :] = True

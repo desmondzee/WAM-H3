@@ -28,6 +28,7 @@ class WAMH3Config:
     latent_w: int = 28
     num_video_latents: int = 2
     obs_t: float = 0.999
+    ctx_sees_video: bool = True
 
     patch_dim = 4
 

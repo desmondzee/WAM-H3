@@ -29,3 +29,13 @@ def test_load_eval_model_from_smoke_checkpoint():
         input_image=torch.rand(1, 3, 224, 448) * 2 - 1, proprio=torch.randn(1, 8),
         context=torch.randn(1, 64, 5120), context_mask=torch.ones(1, 64, dtype=torch.bool), num_inference_steps=2, seed=0)
     assert out["action"].shape == (32, 7) and torch.isfinite(out["action"]).all()
+
+
+def test_facade_provides_every_model_attribute_the_libero_loop_uses():
+    import ast
+    src = (ROOT / "third_party/FasterWAM/experiments/libero/eval_libero_single.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef) and n.name == "_predict_action_chunk")
+    attrs = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "model"}
+    from wam_h3.model.wam import WAMH3
+    missing = {a for a in attrs if a not in ("infer_joint",) and not hasattr(WAMH3, a) and a != "torch_dtype"}
+    assert "infer_action" in attrs and not missing, missing

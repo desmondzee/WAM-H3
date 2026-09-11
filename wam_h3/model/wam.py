@@ -82,6 +82,8 @@ class WAMH3(nn.Module):
             a = self.dit.denoise_actions(cache, self.sched_a, num_inference_steps, generator=g, shift=sigma_shift)
         return {"action": a[0].float().cpu()}
 
+    infer_action = infer_action_one_pass_future_cache
+
     def save_checkpoint(self, path, step, extra=None):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)

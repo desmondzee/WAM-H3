@@ -25,9 +25,9 @@ def test_collate_pads_and_masks():
     embs = [torch.ones(3, 8), torch.full((5, 8), 2.0)]
     ctx, valid = collate_instructions(embs, text_len=6)
     assert ctx.shape == (2, 6, 8) and valid.shape == (2, 6)
-    assert valid.tolist() == [[1, 1, 1, 0, 0, 0], [1, 1, 1, 1, 1, 0]]
-    assert (ctx[0, :3] == 1).all() and (ctx[0, 3:] == 0).all()
-    assert (ctx[1, :5] == 2).all()
+    assert valid.tolist() == [[0, 0, 0, 1, 1, 1], [0, 1, 1, 1, 1, 1]]
+    assert (ctx[0, 3:] == 1).all() and (ctx[0, :3] == 0).all()
+    assert (ctx[1, 1:] == 2).all()
 
 
 def test_collate_rejects_overlong():

@@ -10,6 +10,7 @@ from safetensors.torch import load_file, save_file
 class LoadReport:
     missing: set
     unexpected: set
+    audio: dict
 
 
 def iter_shards(transformer_dir, device="cpu"):
@@ -22,14 +23,16 @@ def iter_shards(transformer_dir, device="cpu"):
 def load_pretrained(model, transformer_dir=None, state_dict=None, dtype=None, device="cpu"):
     items = state_dict.items() if state_dict is not None else iter_shards(transformer_dir, device)
     own = model.state_dict()
-    loaded, unexpected = {}, set()
+    loaded, unexpected, audio = {}, set(), {}
     for k, v in items:
         if k in own:
             loaded[k] = v if dtype is None else v.to(dtype)
         else:
             unexpected.add(k)
+            if k.startswith("audio_patch_proj."):
+                audio[k.split(".")[1]] = v
     model.load_state_dict(loaded, strict=False, assign=True)
-    return LoadReport(set(own) - set(loaded), unexpected)
+    return LoadReport(set(own) - set(loaded), unexpected, audio)
 
 
 def trainable_state_dict(model):

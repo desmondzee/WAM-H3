@@ -91,7 +91,7 @@ class Trainer:
                         rate = (self.step - start) / max(time.time() - t0, 1e-6)
                         eta = (self.total_steps - self.step) / max(rate, 1e-9)
                         print(f"step {self.step}/{self.total_steps} ep {self.epoch} loss {loss_val:.4f} "
-                              f"v {parts['loss_video']:.4f} a {parts['loss_action']:.4f} gn {float(gn):.3f} "
+                              f"v {parts['loss_video']:.4f} v1 {parts['loss_video_full_noise']:.4f} a {parts['loss_action']:.4f} gn {float(gn):.3f} "
                               f"lr {self.opt.param_groups[0]['lr']:.2e} {rate:.2f} it/s eta {eta / 60:.1f} min", flush=True)
                     if self.c.save_every and self.step % self.c.save_every == 0:
                         self.save(loss_val)

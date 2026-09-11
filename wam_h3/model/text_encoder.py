@@ -17,8 +17,8 @@ def collate_instructions(embs, text_len):
     for i, e in enumerate(embs):
         if e.shape[0] > text_len:
             raise ValueError(f"instruction has {e.shape[0]} tokens, text_len is {text_len}")
-        ctx[i, : e.shape[0]] = e
-        valid[i, : e.shape[0]] = True
+        ctx[i, text_len - e.shape[0]:] = e
+        valid[i, text_len - e.shape[0]:] = True
     return ctx, valid
 
 

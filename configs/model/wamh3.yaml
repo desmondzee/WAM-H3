@@ -15,3 +15,4 @@ dtype: bfloat16
 shift: 5.0
 video_weight_center: 1.0
 video_full_noise_prob: 0.3
+ctx_sees_video: true

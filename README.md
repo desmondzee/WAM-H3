@@ -46,6 +46,7 @@ uv run pytest tests -q
 ```
 
 Video loss weight is centred at σ=1 with σ_v=1 sampled 30% of the time (`model.video_weight_center`, `model.video_full_noise_prob`); see the spec for why this departs from FasterWAM.
+`model.ctx_sees_video=false` switches text/obs rows to FasterWAM's first-frame-causal mask (default lets them read the noisy future like H3 pretraining). Training logs `v1` = video loss on the σ_v=1 samples, the inference condition.
 Hydra overrides work everywhere: `train.batch_size=8 train.grad_accum=2`, `model.lora_r=64`, `EVALUATION.num_trials=20`.
 `eval_libero.sh` first caches every task instruction of the benchmark (`precompute_text_embeds.py --benchmark-suites ...`, one encoder load on the eval GPU), so LIBERO-Plus's rewritten instructions are covered; other prompts can be added with `--prompts-file`.
 
