@@ -122,3 +122,12 @@ def test_infer_bf16_base_with_fp32_heads(tmp_path):
                                                context=torch.randn(1, m.cfg.text_len, m.cfg.text_dim),
                                                context_mask=torch.ones(1, m.cfg.text_len, dtype=torch.bool), num_inference_steps=2, seed=0)
     assert out["action"].shape == (m.cfg.action_horizon, m.cfg.action_dim) and torch.isfinite(out["action"]).all()
+
+
+def test_build_inputs_chunked_vae_matches_per_sample(tmp_path):
+    m = make(tmp_path)
+    s = sample(m.cfg, B=6)
+    inp = m.build_inputs(s)
+    one = m.build_inputs({k: v[5:6] for k, v in s.items()})
+    assert torch.allclose(inp["video_rows"][5], one["video_rows"][0], atol=1e-5)
+    assert torch.allclose(inp["obs_rows"][5], one["obs_rows"][0], atol=1e-5)

@@ -1,0 +1,18 @@
+# @package _global_
+# 2 GPUs (FSDP2), libero_spatial, 3 epochs at global batch 128 (2 x 16 x 4)
+task_name: libero_wamh3_2gpu
+model:
+  lora_r: 64
+  lora_alpha: 64
+  lora_adaln_r: 16
+data:
+  train:
+    dataset_dirs:
+      - ./data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
+train:
+  batch_size: 16
+  grad_accum: 4
+  num_workers: 8
+  max_steps: 1250
+  save_every: 250
+  log_every: 10
