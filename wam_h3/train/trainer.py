@@ -64,7 +64,7 @@ class Trainer:
 
     def train(self):
         it, t0, start = iter(self.loader), time.time(), self.step
-        loss_val = None
+        loss_val, acc_parts = None, []
         while self.step < self.total_steps:
             try:
                 batch = next(it)
@@ -80,13 +80,17 @@ class Trainer:
                 with self.acc.autocast():
                     loss, parts = self.model.training_loss(batch)
                 self.acc.backward(loss)
+                acc_parts.append(dict(parts, loss=loss.item()))
                 if self.acc.sync_gradients:
                     gn = self.acc.clip_grad_norm_(self.dit.parameters(), self.c.max_grad_norm)
                     self.opt.step()
                     self.sched.step()
                     self.opt.zero_grad(set_to_none=True)
                     self.step += 1
-                    loss_val = self.acc.gather(loss.detach().float().reshape(1)).mean().item()
+                    stacked = torch.tensor([[p[k] for k in acc_parts[0]] for p in acc_parts], device=loss.device)
+                    means = torch.nanmean(self.acc.gather(stacked.float()), dim=0)
+                    parts = {k: float(v) for k, v in zip(acc_parts[0], means)}
+                    loss_val, acc_parts = parts.pop("loss"), []
                     if self.step % self.c.log_every == 0 and self.acc.is_main_process:
                         rate = (self.step - start) / max(time.time() - t0, 1e-6)
                         eta = (self.total_steps - self.step) / max(rate, 1e-9)
