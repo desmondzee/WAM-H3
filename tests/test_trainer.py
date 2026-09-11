@@ -110,15 +110,3 @@ def test_run_training_end_to_end(tmp_path, monkeypatch):
     assert (tmp_path / "run/checkpoints/step_000002/adapter.safetensors").exists()
     assert (tmp_path / "run/config.yaml").exists()
 
-
-def test_fixed_probe_is_deterministic_and_periodic(tmp_path):
-    model = make(tmp_path, r=4)
-    seen = []
-    t = Trainer(train_cfg(tmp_path, max_steps=4, save_every=0, log_every=1, probe_every=2, lr=0.0), model, ListDataset(model.cfg),
-                Accelerator(cpu=True), log=lambda d, step: seen.append((step, d)))
-    t.train()
-    probes = [(s, d) for s, d in seen if "probe/loss_video" in d]
-    assert [s for s, _ in probes] == [2, 4]
-    assert probes[0][1]["probe/loss_video"] == probes[1][1]["probe/loss_video"]
-    assert probes[0][1]["probe/loss_action"] == probes[1][1]["probe/loss_action"]
-    assert "probe/loss_video_full_noise" in probes[0][1]

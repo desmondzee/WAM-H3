@@ -22,7 +22,6 @@ train:
   max_steps: null
   save_every: 2000
   log_every: 10
-  probe_every: 50
   resume: null
 
 eval_num_inference_steps: 10
