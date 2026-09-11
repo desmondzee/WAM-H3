@@ -13,6 +13,7 @@ World Action Model on the MiniMax-H3 33B omni-transformer. Actions occupy H3's a
 ```bash
 git clone --recurse-submodules https://github.com/desmondzee/WAM-H3 && cd WAM-H3
 bash scripts/setup_core.sh      # venv, weights, LIBERO data, simulators, text embeddings, tests
+uv run wandb login              # once per machine, before any dev/full run (or export WANDB_API_KEY)
 bash scripts/run_dev.sh         # 1 GPU: rank-16 LoRA on libero_spatial, 3000 steps, then LIBERO + LIBERO-Plus eval
 bash scripts/run_full.sh        # 8 GPUs: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
 ```
@@ -21,7 +22,7 @@ Optional: `bash scripts/smoke_test.sh` (tiny random DiT, real VAE, 8 steps + 1 s
 
 ## Weights & Biases
 
-Training logs `train/*` (loss, video/action split, `loss_video_full_noise`, grad norm, lr, throughput) every `train.log_every` steps to project `wam-h3` (run name = task name), and each eval logs `eval/<benchmark>/<suite>` success rates into the same run. Set `WANDB_API_KEY` on the node (or `wandb login`); use `wandb.mode=offline` or `wandb.mode=disabled` to change behaviour, `wandb.project=... wandb.name=...` to rename.
+Training logs `train/*` (loss, video/action split, `loss_video_full_noise`, grad norm, lr, throughput) every `train.log_every` steps to project `wam-h3` (run name = task name), and each eval logs `eval/<benchmark>/<suite>` success rates into the same run. Run `uv run wandb login` once on the node before `run_dev.sh`/`run_full.sh` (or export `WANDB_API_KEY`); use `wandb.mode=offline` or `wandb.mode=disabled` to change behaviour, `wandb.project=... wandb.name=...` to rename.
 
 ## Outputs
 
