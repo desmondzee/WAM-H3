@@ -71,7 +71,7 @@ def test_single_gpu_task_config():
         one = compose(config_name="train", overrides=["task=libero_wamh3_1gpu"])
         tiny = compose(config_name="train", overrides=["task=smoke_libero_tiny", "model.lora_r=8", "model.lora_adaln_r=2"])
     assert one.model.lora_r == one.model.lora_alpha == 64 and one.model.lora_adaln_r == 16
-    assert one.train.batch_size == 2 and one.train.grad_accum == 64 and one.train.max_steps == 900
+    assert one.train.batch_size == 2 and one.train.grad_accum == 64 and one.train.max_steps == 2200
     assert len(one.data.train.dataset_dirs) == 4
     m = instantiate(tiny.model)
     assert m.dit.blocks[0].adaln_proj.linear.lora_A["default"].weight.shape[0] == 2

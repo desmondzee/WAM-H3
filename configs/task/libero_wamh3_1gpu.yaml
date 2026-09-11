@@ -1,5 +1,5 @@
 # @package _global_
-# one 96 GB GPU, all four suites, ~15 h at ~60 s/step
+# one 96 GB GPU, all four suites, one epoch at global batch 128 (~37 h at 60 s/step; try batch_size=4 grad_accum=32)
 task_name: libero_wamh3_1gpu
 model:
   lora_r: 64
@@ -9,6 +9,6 @@ train:
   batch_size: 2
   grad_accum: 64
   num_workers: 8
-  max_steps: 900
+  max_steps: 2200
   save_every: 100
   log_every: 1

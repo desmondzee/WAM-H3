@@ -15,7 +15,7 @@ git clone --recurse-submodules https://github.com/desmondzee/WAM-H3 && cd WAM-H3
 bash scripts/setup_core.sh      # venv, weights, LIBERO data, simulators, text embeddings, tests
 uv run wandb login              # once per machine, before any dev/full run (or export WANDB_API_KEY)
 bash scripts/run_dev.sh         # 1x80 GB: rank-16 LoRA on libero_spatial, 600 steps at global batch 128, then LIBERO + LIBERO-Plus eval
-bash scripts/run_1gpu.sh        # 1x96 GB: rank-64 LoRA (AdaLN rank 16) on all 4 suites, 900 steps (~15 h), then eval
+bash scripts/run_1gpu.sh        # 1x96 GB: rank-64 LoRA (AdaLN rank 16) on all 4 suites, 1 epoch (2200 steps), then eval
 bash scripts/run_full.sh        # 8x80 GB: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
 ```
 
