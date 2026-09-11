@@ -1,0 +1,14 @@
+defaults:
+  - sim_libero
+  - _self_
+
+benchmark_name: libero-plus
+
+EVALUATION:
+  num_trials: 1
+  num_steps_wait: 30
+
+MULTIRUN:
+  task_sample_ratio: 0.15
+  max_tasks_per_gpu: 2
+  chunk_size: 20

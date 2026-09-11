@@ -1,0 +1,52 @@
+ckpt: null
+gpu_id: 0
+seed: 42
+benchmark_name: libero
+mixed_precision: bf16
+eval_num_inference_steps: 10
+
+EVALUATION:
+  task_suite_name: libero_spatial
+  task_id: 0
+  num_trials: 50
+  output_dir: null
+  env_num: 1
+  num_steps_wait: 10
+  replan_steps: 10
+  binarize_gripper: true
+  use_action_ensembler: false
+  visualize_future_video: false
+  action_horizon: null
+  num_inference_steps: ${eval_num_inference_steps}
+  action_infer_mode: one_pass_future_cache
+  sigma_shift: null
+  text_cfg_scale: 1.0
+  negative_prompt: ""
+  rand_device: cpu
+  tiled: false
+  dataset_stats_path: null
+  device: cuda
+  load_text_encoder: false
+
+MULTIRUN:
+  create_only: false
+  dry_run: false
+  task_file: null
+  task_sample_ratio: null
+  task_sample_seed: 42
+  task_suite_names:
+    - libero_spatial
+    - libero_object
+    - libero_goal
+    - libero_10
+  num_gpus: 8
+  gpu_ids: null
+  max_tasks_per_gpu: 1
+  chunk_size: 10
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null
