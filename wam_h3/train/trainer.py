@@ -20,9 +20,9 @@ def build_scheduler(opt, total_steps, warmup_ratio, min_lr_ratio):
 
 
 class Trainer:
-    def __init__(self, cfg, model, dataset, accelerator):
+    def __init__(self, cfg, model, dataset, accelerator, log=None):
         c, acc = cfg.train, accelerator
-        self.c, self.acc, self.model = c, acc, model
+        self.c, self.acc, self.model, self.log = c, acc, model, log or (lambda m, s: None)
         self.out = Path(cfg.output_dir)
         self.trainable = {n for n, p in model.dit.named_parameters() if p.requires_grad}
         self.step = self.epoch = self.batch_in_epoch = 0
@@ -90,9 +90,13 @@ class Trainer:
                     if self.step % self.c.log_every == 0 and self.acc.is_main_process:
                         rate = (self.step - start) / max(time.time() - t0, 1e-6)
                         eta = (self.total_steps - self.step) / max(rate, 1e-9)
+                        lr = self.opt.param_groups[0]["lr"]
                         print(f"step {self.step}/{self.total_steps} ep {self.epoch} loss {loss_val:.4f} "
                               f"v {parts['loss_video']:.4f} v1 {parts['loss_video_full_noise']:.4f} a {parts['loss_action']:.4f} gn {float(gn):.3f} "
-                              f"lr {self.opt.param_groups[0]['lr']:.2e} {rate:.2f} it/s eta {eta / 60:.1f} min", flush=True)
+                              f"lr {lr:.2e} {rate:.2f} it/s eta {eta / 60:.1f} min", flush=True)
+                        self.log({"train/loss": loss_val, "train/loss_video": parts["loss_video"], "train/loss_action": parts["loss_action"],
+                                  "train/loss_video_full_noise": parts["loss_video_full_noise"], "train/grad_norm": float(gn),
+                                  "train/lr": lr, "train/epoch": self.epoch, "train/steps_per_sec": rate}, self.step)
                     if self.c.save_every and self.step % self.c.save_every == 0:
                         self.save(loss_val)
         if not self.c.save_every or self.step % self.c.save_every:

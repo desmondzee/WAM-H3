@@ -16,6 +16,7 @@ from omegaconf import OmegaConf
 
 from wam_h3.eval.policy import run_dir_of
 from wam_h3.eval.results import summarize
+from wam_h3.train.wandb_log import log_eval
 
 
 @hydra.main(config_path="../configs", config_name="sim_libero", version_base=None)
@@ -38,7 +39,9 @@ def main(cfg):
                      chunk_size=int(mr.chunk_size), output_dir=out, extra_overrides=m.collect_worker_overrides(),
                      gpu_ids=m._parse_gpu_ids(mr), dry_run=bool(mr.dry_run))
     if not mr.dry_run:
-        print(json.dumps(summarize(out), indent=1))
+        summary = summarize(out)
+        log_eval(run_dir_of(ckpt), str(cfg.benchmark_name), int(ckpt.name.split("_")[-1]), summary)
+        print(json.dumps(summary, indent=1))
         print(f"results: {out}")
 
 

@@ -8,6 +8,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from .trainer import Trainer
+from .wandb_log import init_train
 
 
 def run_training(cfg):
@@ -22,6 +23,8 @@ def run_training(cfg):
     if acc.is_main_process:
         n = sum(p.numel() for p in model.dit.parameters() if p.requires_grad)
         print(f"trainable params {n / 1e6:.1f}M, dataset {len(dataset)} samples, device {acc.device}", flush=True)
-    Trainer(cfg, model, dataset, acc).train()
+    log, finish = init_train(cfg) if acc.is_main_process else ((lambda m, s: None), (lambda: None))
+    Trainer(cfg, model, dataset, acc, log=log).train()
+    finish()
     if acc.is_main_process and torch.cuda.is_available():
         print(f"peak memory {torch.cuda.max_memory_allocated() / 1e9:.1f} GB", flush=True)

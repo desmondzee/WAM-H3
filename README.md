@@ -19,6 +19,10 @@ bash scripts/run_full.sh        # 8 GPUs: rank-128 LoRA on all 4 suites, 21.7k s
 
 Optional: `bash scripts/smoke_test.sh` (tiny random DiT, real VAE, 8 steps + 1 sim trial + latency; also runs on CPU).
 
+## Weights & Biases
+
+Training logs `train/*` (loss, video/action split, `loss_video_full_noise`, grad norm, lr, throughput) every `train.log_every` steps to project `wam-h3` (run name = task name), and each eval logs `eval/<benchmark>/<suite>` success rates into the same run. Set `WANDB_API_KEY` on the node (or `wandb login`); use `wandb.mode=offline` or `wandb.mode=disabled` to change behaviour, `wandb.project=... wandb.name=...` to rename.
+
 ## Outputs
 
 ```

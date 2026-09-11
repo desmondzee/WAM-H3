@@ -26,6 +26,11 @@ train:
 
 eval_num_inference_steps: 10
 
+wandb:
+  mode: online
+  project: wam-h3
+  name: null
+
 hydra:
   job:
     chdir: false

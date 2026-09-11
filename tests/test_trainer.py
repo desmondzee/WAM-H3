@@ -12,7 +12,7 @@ def train_cfg(tmp_path, **kw):
     base = dict(batch_size=2, grad_accum=1, num_workers=0, lr=1e-3, weight_decay=0.0, betas=[0.9, 0.95], warmup_ratio=0.25,
                 min_lr_ratio=0.1, max_grad_norm=1.0, num_epochs=1, max_steps=4, save_every=2, log_every=1, resume=None)
     base.update(kw)
-    return OmegaConf.create(dict(train=base, output_dir=str(tmp_path / "run"), seed=0))
+    return OmegaConf.create(dict(train=base, output_dir=str(tmp_path / "run"), seed=0, wandb=dict(mode="disabled", project="wam-h3", name=None)))
 
 
 def test_scheduler_warmup_then_cosine():
@@ -71,3 +71,14 @@ def test_trainer_resumes_from_checkpoint(tmp_path):
     t2.train()
     assert (tmp_path / "run/checkpoints/step_000005").exists()
     assert json.loads((tmp_path / "run/checkpoints/step_000004/trainer_state.json").read_text())["step"] == 4
+
+
+def test_trainer_logs_metrics_each_step(tmp_path):
+    model = make(tmp_path, r=4)
+    seen = []
+    t = Trainer(train_cfg(tmp_path, max_steps=3, save_every=0, log_every=1), model, ListDataset(model.cfg), Accelerator(cpu=True),
+                log=lambda d, step: seen.append((step, d)))
+    t.train()
+    assert [s for s, _ in seen] == [1, 2, 3]
+    assert {"train/loss", "train/loss_video", "train/loss_video_full_noise", "train/loss_action", "train/grad_norm", "train/lr",
+            "train/epoch", "train/steps_per_sec"} <= set(seen[0][1])
