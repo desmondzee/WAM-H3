@@ -50,6 +50,7 @@ class Trainer:
     def save(self, loss):
         sd = {}
         for n, p in self.dit.named_parameters():
+            n = n.removeprefix("module.")
             if n in self.trainable:
                 t = p.detach()
                 sd[n] = (t.full_tensor() if hasattr(t, "full_tensor") else t).cpu().contiguous()

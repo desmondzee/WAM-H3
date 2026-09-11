@@ -8,7 +8,7 @@ def _masked_mean(per_row, is_pad):
 
 
 def training_loss(dit, batch, sched_v, sched_a, generator=None, full_noise_prob=0.0):
-    cfg = dit.cfg
+    cfg = getattr(dit, "module", dit).cfg
     video, action = batch["video_rows"], batch["action"]
     B, dev = video.shape[0], video.device
     sv, sa = sched_v.sample_sigma(B, dev, generator), sched_a.sample_sigma(B, dev, generator)

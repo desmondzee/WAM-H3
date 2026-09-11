@@ -24,12 +24,16 @@ class WAMH3(nn.Module):
         self._prompts = {}
 
     @property
+    def core(self):
+        return getattr(self.dit, "module", self.dit)
+
+    @property
     def device(self):
-        return self.dit.condition_proj.weight.device
+        return self.core.condition_proj.weight.device
 
     @property
     def torch_dtype(self):
-        return self.dit.condition_proj.weight.dtype
+        return self.core.condition_proj.weight.dtype
 
     def encode_prompt(self, prompt):
         if prompt not in self._prompts:
@@ -79,8 +83,8 @@ class WAMH3(nn.Module):
         sig, _ = self.sched_a.inference_schedule(num_inference_steps, sigma_shift)
         tg = torch.tensor([[1.0, cfg.obs_t, 1 - sig[0].item(), 0.0]], device=self.device)
         with torch.autocast(self.device.type, dtype=self.torch_dtype, enabled=self.torch_dtype != torch.float32):
-            cache = self.dit.prefill(inp["text"], inp["text_valid"], inp["obs_rows"], inp["proprio"], noise, tg)
-            a = self.dit.denoise_actions(cache, self.sched_a, num_inference_steps, generator=g, shift=sigma_shift)
+            cache = self.core.prefill(inp["text"], inp["text_valid"], inp["obs_rows"], inp["proprio"], noise, tg)
+            a = self.core.denoise_actions(cache, self.sched_a, num_inference_steps, generator=g, shift=sigma_shift)
         return {"action": a[0].float().cpu()}
 
     infer_action = infer_action_one_pass_future_cache
