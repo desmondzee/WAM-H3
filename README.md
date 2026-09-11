@@ -49,6 +49,7 @@ bash scripts/train_single.sh task=libero_wamh3_dev                 # or task=lib
 bash scripts/train_single.sh task=libero_wamh3_dev train.resume=runs/libero_wamh3_dev/<run>/checkpoints/step_001000
 bash scripts/eval_libero.sh ckpt=runs/.../checkpoints/step_003000 MULTIRUN.num_gpus=8
 bash scripts/eval_libero_plus.sh ckpt=... MULTIRUN.num_gpus=8
+bash scripts/eval_latest.sh libero_wamh3_dev libero 'MULTIRUN.gpu_ids=[1]'   # newest checkpoint of a task, on GPU 1 while GPU 0 trains
 uv run scripts/measure_latency.py --task libero_wamh3_dev --ckpt runs/.../step_003000
 uv run pytest tests -q
 ```
