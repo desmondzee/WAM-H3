@@ -41,6 +41,7 @@ class Trainer:
         per_epoch = ceil(ceil(len(dataset) / (c.batch_size * acc.num_processes)) / c.grad_accum)
         self.total_steps = int(c.max_steps) if c.max_steps else per_epoch * c.num_epochs
         self.sched = build_scheduler(self.opt, self.total_steps, c.warmup_ratio, c.min_lr_ratio)
+        self.probe_batch = next(iter(self.loader)) if c.get("probe_every") else None
         if c.resume:
             self.sampler.set_epoch(self.epoch)
             self.sampler.set_resume_batch_offset(self.batch_in_epoch)
@@ -61,6 +62,15 @@ class Trainer:
                 step=self.step, epoch=self.epoch, batch_in_epoch=self.batch_in_epoch, loss=loss,
                 lr=self.opt.param_groups[0]["lr"]), indent=1))
         self.acc.wait_for_everyone()
+
+    @torch.no_grad()
+    def probe(self):
+        g = torch.Generator(device=self.acc.device).manual_seed(0)
+        with self.acc.autocast():
+            _, parts = self.model.training_loss(self.probe_batch, generator=g)
+        vals = torch.tensor([parts[k] for k in ("loss_video", "loss_action", "loss_video_full_noise")], device=self.acc.device)
+        means = torch.nanmean(self.acc.gather(vals.float().reshape(1, -1)), dim=0)
+        return {f"probe/{k}": float(v) for k, v in zip(("loss_video", "loss_action", "loss_video_full_noise"), means)}
 
     def train(self):
         it, t0, start = iter(self.loader), time.time(), self.step
@@ -102,6 +112,7 @@ class Trainer:
                     means = torch.nanmean(self.acc.gather(stacked.float()), dim=0)
                     parts = {k: float(v) for k, v in zip(acc_parts[0], means)}
                     loss_val, acc_parts = parts.pop("loss"), []
+                    probe = self.probe() if self.probe_batch is not None and self.step % self.c.probe_every == 0 else {}
                     if self.step % self.c.log_every == 0 and self.acc.is_main_process:
                         rate = (self.step - start) / max(time.time() - t0, 1e-6)
                         eta = (self.total_steps - self.step) / max(rate, 1e-9)
@@ -112,7 +123,7 @@ class Trainer:
                         self.log({"train/loss": loss_val, "train/loss_video": parts["loss_video"], "train/loss_action": parts["loss_action"],
                                   "train/loss_video_full_noise": parts["loss_video_full_noise"], "train/grad_norm": float(gn),
                                   "train/lr": lr, "train/epoch": self.epoch, "train/steps_per_sec": rate,
-                                  "train/grad_var": grad_var, "train/grad_noise_scale": noise_scale}, self.step)
+                                  "train/grad_var": grad_var, "train/grad_noise_scale": noise_scale, **probe}, self.step)
                     if self.c.save_every and self.step % self.c.save_every == 0:
                         self.save(loss_val)
         if not self.c.save_every or self.step % self.c.save_every:

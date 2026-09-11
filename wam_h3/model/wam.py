@@ -62,8 +62,9 @@ class WAMH3(nn.Module):
             out["action_is_pad"] = s["action_is_pad"].to(dev)
         return out
 
-    def training_loss(self, s):
-        return training_loss(self.dit, self.build_inputs(s), self.sched_v, self.sched_a, full_noise_prob=self.video_full_noise_prob)
+    def training_loss(self, s, generator=None):
+        return training_loss(self.dit, self.build_inputs(s), self.sched_v, self.sched_a, generator=generator,
+                             full_noise_prob=self.video_full_noise_prob)
 
     @torch.no_grad()
     def infer_action_one_pass_future_cache(self, input_image, proprio=None, prompt=None, context=None, context_mask=None,
