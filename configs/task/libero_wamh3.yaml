@@ -1,0 +1,9 @@
+# @package _global_
+task_name: libero_wamh3
+model:
+  lora_r: 128
+train:
+  batch_size: 16
+  grad_accum: 1
+  num_epochs: 10
+  save_every: 2000

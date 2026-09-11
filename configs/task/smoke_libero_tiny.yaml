@@ -1,0 +1,17 @@
+# @package _global_
+task_name: smoke_libero_tiny
+model:
+  tiny: true
+  lora_r: 4
+  dtype: float32
+data:
+  train:
+    dataset_dirs:
+      - ./data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
+train:
+  batch_size: 1
+  grad_accum: 1
+  num_workers: 0
+  max_steps: 8
+  save_every: 4
+  log_every: 1

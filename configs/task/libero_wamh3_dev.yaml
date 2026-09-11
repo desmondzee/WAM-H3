@@ -1,0 +1,14 @@
+# @package _global_
+task_name: libero_wamh3_dev
+model:
+  lora_r: 16
+data:
+  train:
+    dataset_dirs:
+      - ./data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
+train:
+  batch_size: 2
+  grad_accum: 8
+  num_workers: 4
+  max_steps: 3000
+  save_every: 500

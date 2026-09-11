@@ -1,0 +1,15 @@
+_target_: wam_h3.model.build.create_wamh3
+weights_root: ./FL2VA
+tiny: false
+lora_r: 128
+lora_alpha: null
+action_dim: ${data.train.processor.action_output_dim}
+proprio_dim: ${data.train.processor.proprio_output_dim}
+video_size: ${data.train.video_size}
+num_frames: ${data.train.num_frames}
+action_video_freq_ratio: ${data.train.action_video_freq_ratio}
+text_len: ${data.train.context_len}
+text_cache_dir: ${data.train.text_embedding_cache_dir}
+load_text_encoder: false
+dtype: bfloat16
+shift: 5.0

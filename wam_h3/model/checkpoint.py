@@ -12,15 +12,15 @@ class LoadReport:
     unexpected: set
 
 
-def iter_shards(transformer_dir):
+def iter_shards(transformer_dir, device="cpu"):
     for shard in sorted(Path(transformer_dir).glob("*.safetensors")):
-        with safe_open(str(shard), framework="pt") as f:
+        with safe_open(str(shard), framework="pt", device=str(device)) as f:
             for k in f.keys():
                 yield k, f.get_tensor(k)
 
 
-def load_pretrained(model, transformer_dir=None, state_dict=None, dtype=None):
-    items = state_dict.items() if state_dict is not None else iter_shards(transformer_dir)
+def load_pretrained(model, transformer_dir=None, state_dict=None, dtype=None, device="cpu"):
+    items = state_dict.items() if state_dict is not None else iter_shards(transformer_dir, device)
     own = model.state_dict()
     loaded, unexpected = {}, set()
     for k, v in items:

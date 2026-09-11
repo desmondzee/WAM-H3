@@ -39,7 +39,8 @@ class WAMH3DiT(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.layout = SequenceLayout(cfg)
+        with torch.device("cpu"):
+            self.layout = SequenceLayout(cfg)
         self.video_patch_proj = nn.Linear(cfg.video_patch_dim, cfg.hidden_size)
         self.action_in = nn.Linear(cfg.action_dim, cfg.hidden_size)
         self.proprio_in = nn.Linear(cfg.proprio_dim, cfg.hidden_size) if cfg.proprio_dim else None
@@ -49,13 +50,16 @@ class WAMH3DiT(nn.Module):
         self.token_refiner = TokenRefiner(cfg)
         self.blocks = nn.ModuleList([DiTBlock(cfg) for _ in range(cfg.num_layers)])
         self.final_layer = FinalLayer(cfg)
-        self.register_buffer("position_ids", self.layout.position_ids, persistent=False)
-        self.register_buffer("row_group", self.layout.row_group, persistent=False)
-        self.register_buffer("row_tag", self.layout.row_tag, persistent=False)
+        self.init_buffers()
+
+    def init_buffers(self, device=None):
         lay = self.layout
-        self.register_buffer("ctx_rows", torch.cat([torch.arange(0, lay.action.start),
-                                                    torch.arange(lay.video.start, lay.video.stop)]), persistent=False)
-        self.register_buffer("action_rows", torch.arange(lay.action.start, lay.action.stop), persistent=False)
+        device = device or self.condition_proj.weight.device
+        for name, t in [("position_ids", lay.position_ids), ("row_group", lay.row_group), ("row_tag", lay.row_tag),
+                        ("ctx_rows", torch.cat([torch.arange(0, lay.action.start), torch.arange(lay.video.start, lay.video.stop)])),
+                        ("action_rows", torch.arange(lay.action.start, lay.action.stop))]:
+            self.register_buffer(name, t.to(device), persistent=False)
+        self.rope.inv_freq.data = self.rope._inv_freq(device)
 
     def freqs(self, rows=None):
         f = self.rope(self.position_ids[None])
