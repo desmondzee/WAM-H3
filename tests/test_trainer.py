@@ -64,6 +64,10 @@ def test_trainer_resumes_from_checkpoint(tmp_path):
     t2 = Trainer(train_cfg(tmp_path, max_steps=5, save_every=2, resume=str(tmp_path / "run/checkpoints/step_000002")),
                  model2, ListDataset(model2.cfg), Accelerator(cpu=True))
     assert t2.step == 2
+    from safetensors.torch import load_file
+    ck = load_file(str(tmp_path / "run/checkpoints/step_000002/adapter.safetensors"))
+    sd2 = model2.dit.state_dict()
+    assert all(torch.equal(sd2[k], v) for k, v in ck.items()) and "blocks.0.attn.qkv_proj.lora_B.default.weight" in ck
     t2.train()
     assert (tmp_path / "run/checkpoints/step_000005").exists()
     assert json.loads((tmp_path / "run/checkpoints/step_000004/trainer_state.json").read_text())["step"] == 4

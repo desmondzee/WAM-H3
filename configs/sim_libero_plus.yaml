@@ -10,5 +10,5 @@ EVALUATION:
 
 MULTIRUN:
   task_sample_ratio: 0.15
-  max_tasks_per_gpu: 2
+  max_tasks_per_gpu: 1
   chunk_size: 20

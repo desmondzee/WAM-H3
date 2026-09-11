@@ -2,4 +2,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 NUM_GPUS=8; case "${1:-}" in ""|*[!0-9]*) ;; *) NUM_GPUS=$1; shift ;; esac
-uv run accelerate launch --config_file configs/accelerate/fsdp.yaml --num_processes "$NUM_GPUS" scripts/train.py "$@"
+uv run accelerate launch --config_file configs/accelerate/fsdp.yaml --num_processes "$NUM_GPUS" scripts/train.py "output_dir=runs/\${task_name}/$(date +%Y%m%d_%H%M%S)" "$@"

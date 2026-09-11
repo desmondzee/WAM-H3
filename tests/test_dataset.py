@@ -32,6 +32,18 @@ def test_precompute_fake_writes_one_embedding_per_prompt(tmp_path):
 
 
 @needs_data
+def test_dataset_refuses_uncached_prompts(tmp_path):
+    from fasterwam.utils import misc
+    from wam_h3.data.dataset import WAMH3VideoDataset
+
+    misc.register_work_dir(tmp_path)
+    cfg = OmegaConf.create({"data": OmegaConf.load(ROOT / "configs/data/libero_2cam.yaml")}).data.train
+    cfg.dataset_dirs, cfg.text_embedding_cache_dir = [str(DATA)], str(tmp_path / "empty")
+    with pytest.raises(FileNotFoundError):
+        WAMH3VideoDataset(**{k: v for k, v in cfg.items() if k != "_target_"})
+
+
+@needs_data
 def test_dataset_sample_layout(tmp_path):
     from fasterwam.utils import misc
     from wam_h3.data.dataset import WAMH3VideoDataset

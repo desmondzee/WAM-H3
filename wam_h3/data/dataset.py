@@ -1,4 +1,7 @@
-from fasterwam.datasets.lerobot.robot_video_dataset import RobotVideoDataset
+import json
+from pathlib import Path
+
+from fasterwam.datasets.lerobot.robot_video_dataset import DEFAULT_PROMPT, RobotVideoDataset
 
 from ..model.text_encoder import collate_instructions
 from .text_cache import load_embedding
@@ -8,6 +11,10 @@ class WAMH3VideoDataset(RobotVideoDataset):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self._text = {}
+        tasks = [json.loads(l)["task"] for d in kw["dataset_dirs"] for l in (Path(d) / "meta/tasks.jsonl").read_text().splitlines() if l.strip()]
+        missing = [t for t in dict.fromkeys(tasks) if load_embedding(self.text_embedding_cache_dir, DEFAULT_PROMPT.format(task=t)) is None]
+        if missing:
+            raise FileNotFoundError(f"{len(missing)} instructions have no cached embedding in {self.text_embedding_cache_dir}, e.g. {missing[0]!r}")
 
     def _get_cached_text_context(self, prompt):
         if prompt not in self._text:

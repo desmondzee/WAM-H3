@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,6 +11,8 @@ for p in (FW, FW / "experiments/libero"):
 
 import hydra
 from hydra.core.hydra_config import HydraConfig
+
+from omegaconf import OmegaConf
 
 from wam_h3.eval.policy import run_dir_of
 from wam_h3.eval.results import summarize
@@ -24,6 +27,9 @@ def main(cfg):
     out = Path(cfg.EVALUATION.output_dir or run_dir_of(ckpt) / "eval" / cfg.benchmark_name / ckpt.name).resolve()
     out.mkdir(parents=True, exist_ok=True)
     mr = cfg.MULTIRUN
+    cache = OmegaConf.load(run_dir_of(ckpt) / "config.yaml").model.text_cache_dir
+    subprocess.run([sys.executable, str(ROOT / "scripts/precompute_text_embeds.py"), "--benchmark-suites", *mr.task_suite_names,
+                    "--cache-dir", str(cache)], check=True, cwd=ROOT)
     task_file = Path(mr.task_file).resolve() if mr.task_file else m.create_task_file(
         out / "tasks.txt", list(mr.task_suite_names), benchmark_name=str(cfg.benchmark_name),
         sample_ratio=m._resolve_sample_ratio(mr.task_sample_ratio), sample_seed=int(mr.task_sample_seed))[0]

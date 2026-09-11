@@ -10,3 +10,4 @@ runs_smoke.log
 *.log
 latency.json
 *.egg-info/
+/.cache/

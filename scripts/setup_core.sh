@@ -11,7 +11,7 @@ for s in spatial object goal 10; do
   d=data/libero_mujoco3.3.2/libero_${s}_no_noops_lerobot
   if [ ! -d "$d" ]; then
     uv run hf download yuanty/LIBERO-fastwam --repo-type dataset --include "libero_${s}_no_noops_lerobot.tar.gz" --local-dir data/_tar
-    tar -xzf "data/_tar/libero_${s}_no_noops_lerobot.tar.gz" -C data/libero_mujoco3.3.2
+    tar -xzf "data/_tar/libero_${s}_no_noops_lerobot.tar.gz" -C data/libero_mujoco3.3.2 && rm -f "data/_tar/libero_${s}_no_noops_lerobot.tar.gz"
   fi
 done
 bash scripts/setup_libero.sh
