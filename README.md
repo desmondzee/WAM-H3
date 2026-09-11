@@ -45,6 +45,7 @@ uv run scripts/measure_latency.py --task libero_wamh3_dev --ckpt runs/.../step_0
 uv run pytest tests -q
 ```
 
+Video loss weight is centred at σ=1 with σ_v=1 sampled 30% of the time (`model.video_weight_center`, `model.video_full_noise_prob`); see the spec for why this departs from FasterWAM.
 Hydra overrides work everywhere: `train.batch_size=8 train.grad_accum=2`, `model.lora_r=64`, `EVALUATION.num_trials=20`.
 Eval prompts must be in the text-embedding cache; if a benchmark uses new instructions, add them with `scripts/precompute_text_embeds.py --prompts-file ... --cache-dir data/text_embeds/libero` or set `EVALUATION.load_text_encoder=true` (loads the encoder on CPU).
 
