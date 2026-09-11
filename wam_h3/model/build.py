@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import torch
@@ -50,7 +51,10 @@ def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, 
         dit = WAMH3DiT(cfg).to(device, dtype)
     else:
         cfg = WAMH3Config.from_pretrained_dir(root, **dims)
-        dit = build_dit(cfg, root / "transformer", device, dtype)
+        sharded = int(os.environ.get("WORLD_SIZE", "1")) > 1
+        dit = build_dit(cfg, root / "transformer", "cpu" if sharded else device, dtype)
+        if sharded:
+            dit.init_buffers(torch.device(device))
     assert cfg.num_frames == n_video, (cfg.num_frames, n_video)
     if lora_r:
         apply_lora(dit, lora_r, lora_alpha, tuple(lora_targets), lora_dropout, adaln_r=lora_adaln_r)

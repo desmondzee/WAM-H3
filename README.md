@@ -5,7 +5,7 @@ World Action Model on the MiniMax-H3 33B omni-transformer. Actions occupy H3's a
 ## Node requirements
 
 - Linux x86_64, CUDA 12.8 drivers, `uv`, `git`, `unzip`, EGL (or set `MUJOCO_GL=osmesa`)
-- Dev run: 1 GPU with 80 GB. Full run: 8x 80 GB. Text-embedding precompute loads the 66 GB Qwen3-VL encoder once (`--device cpu` needs ~140 GB RAM).
+- Dev run: 1 GPU with 80 GB. Multi-GPU (FSDP) runs build the 66 GB DiT in host RAM per rank before sharding: ~70 GB RAM per process. Text-embedding precompute loads the 66 GB Qwen3-VL encoder once (`--device cpu` needs ~140 GB RAM).
 - Disk: ~150 GB (weights 143 GB, LIBERO data 5 GB)
 
 ## Quick start
