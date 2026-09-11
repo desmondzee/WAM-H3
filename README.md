@@ -17,7 +17,6 @@ uv run wandb login              # once per machine, before any dev/full run (or 
 bash scripts/run_dev.sh         # 1x80 GB: rank-16 LoRA on libero_spatial, 600 steps at global batch 128, then LIBERO + LIBERO-Plus eval
 bash scripts/run_1gpu.sh        # 1x96 GB: rank-64 LoRA (AdaLN rank 16) on all 4 suites, 900 steps (~15 h), then eval
 bash scripts/run_full.sh        # 8x80 GB: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
-bash scripts/run_1gpu.sh        # 1x 96 GB (RTX PRO 6000): rank-64 LoRA (AdaLN rank 16) on all 4 suites in a 15.5 h budget, then eval
 ```
 
 `model.lora_adaln_r` gives `adaln_proj.linear` its own LoRA rank (its only input is the timestep embedding), with alpha scaled so alpha/r stays the same.
