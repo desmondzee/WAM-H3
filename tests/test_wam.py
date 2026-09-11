@@ -109,3 +109,16 @@ def test_checkpoint_roundtrip(tmp_path):
     torch.manual_seed(0)
     b, _ = m2.training_loss(s)
     assert torch.allclose(a, b)
+
+
+def test_infer_bf16_base_with_fp32_heads(tmp_path):
+    m = make(tmp_path, r=4)
+    m.dit.to(torch.bfloat16)
+    for p in m.dit.parameters():
+        if p.requires_grad:
+            p.data = p.data.float()
+    assert m.torch_dtype == torch.bfloat16
+    out = m.infer_action_one_pass_future_cache(input_image=torch.rand(1, 3, H, W) * 2 - 1, proprio=torch.randn(1, m.cfg.proprio_dim),
+                                               context=torch.randn(1, m.cfg.text_len, m.cfg.text_dim),
+                                               context_mask=torch.ones(1, m.cfg.text_len, dtype=torch.bool), num_inference_steps=2, seed=0)
+    assert out["action"].shape == (m.cfg.action_horizon, m.cfg.action_dim) and torch.isfinite(out["action"]).all()

@@ -9,28 +9,37 @@ from fasterwam.datasets.lerobot.robot_video_dataset import DEFAULT_PROMPT
 from wam_h3.data.text_cache import load_embedding, save_embedding
 
 
-def collect_prompts(data_dirs, prompts_file):
-    prompts = []
+def benchmark_tasks(suites):
+    from libero.libero import benchmark
+    bench = benchmark.get_benchmark_dict()
+    return [t.language for s in suites for t in bench[s]().tasks]
+
+
+def collect_prompts(data_dirs, prompts_file, suites=()):
+    tasks = []
     for d in data_dirs:
         for line in (Path(d) / "meta/tasks.jsonl").read_text().splitlines():
             if line.strip():
-                prompts.append(DEFAULT_PROMPT.format(task=json.loads(line)["task"]))
+                tasks.append(json.loads(line)["task"])
     if prompts_file:
-        prompts += [DEFAULT_PROMPT.format(task=t.strip()) for t in Path(prompts_file).read_text().splitlines() if t.strip()]
-    return list(dict.fromkeys(prompts))
+        tasks += [t.strip() for t in Path(prompts_file).read_text().splitlines() if t.strip()]
+    if suites:
+        tasks += benchmark_tasks(suites)
+    return list(dict.fromkeys(DEFAULT_PROMPT.format(task=t) for t in tasks))
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dirs", nargs="*", default=[])
     ap.add_argument("--prompts-file")
+    ap.add_argument("--benchmark-suites", nargs="*", default=[])
     ap.add_argument("--cache-dir", required=True)
     ap.add_argument("--weights-root", default="FL2VA")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--fake", action="store_true")
     ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args()
-    prompts = collect_prompts(a.data_dirs, a.prompts_file)
+    prompts = collect_prompts(a.data_dirs, a.prompts_file, a.benchmark_suites)
     todo = [p for p in prompts if a.overwrite or load_embedding(a.cache_dir, p) is None]
     print(f"{len(prompts)} prompts, {len(todo)} to encode")
     if not todo:

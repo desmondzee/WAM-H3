@@ -29,7 +29,7 @@ Decisions already made with the user:
 
 | rows | DiT t (1=clean) | tag |
 |---|---|---|
-| T | 1.0 | 1 |
+| T | 1 − σ_v (as in stock H3, where text rows carry the video timestep) | 1 |
 | S obs | 0.999 (H3 keyframe noise-aug) | 0 |
 | P proprio | 1.0 | 2 |
 | V | 1 − σ_v | 0 |
@@ -37,7 +37,7 @@ Decisions already made with the user:
 
 **RoPE (t,h,w float)**: text t=0..63; obs t=64 + `_frame_grid`; proprio t=64, h=0, w=w_grid[-1]; video latent k at 64 + `_video_t_grid(k)` (spans (1,4,4,4,4)×5/3); action j at 64 + (j/8)·5/3, h=0, w=w_grid[-1]. Actions and video share the t axis → explicit temporal alignment.
 
-**Loss**: MSE on V rows (all latents, masked by `image_is_pad`) × weight_v(σ_v) + MSE on A rows (masked by `action_is_pad`) × weight_a(σ_a), λ=1/1. Convention boundary: scheduler σ∈[0,1] (1 = noise), DiT t = 1−σ, DiT output negated to match target `noise − x`.
+**Loss**: MSE on V rows excluding latent 0 (a copy of the obs rows; FasterWAM also drops frame 0), masked by `image_is_pad`, × weight_v(σ_v) + MSE on A rows (masked by `action_is_pad`) × weight_a(σ_a), λ=1/1. Convention boundary: scheduler σ∈[0,1] (1 = noise), DiT t = 1−σ, DiT output negated to match target `noise − x`.
 
 **Video weighting differs from FasterWAM on purpose.** FasterWAM's weight is a Gaussian bump centred at σ=0.5 with its grid minimum subtracted; on the shift-5 grid that minimum is at σ=1, so the video weight at the exact inference condition (one pass at σ_v=1) is 0, and φ(u) never samples σ=1. Here `weight_v` is the bump centred at σ=1 with no min-subtraction (max weight at the inference condition, mean 1 over the training distribution) and σ_v is set to exactly 1 with probability 0.3 (`model.video_weight_center`, `model.video_full_noise_prob`). Actions keep FasterWAM's schedule: the σ_a=1 Euler step has delta −0.022, so its zero weight is harmless.
 

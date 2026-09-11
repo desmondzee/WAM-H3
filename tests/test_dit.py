@@ -121,5 +121,6 @@ def test_action_modulation_independent_of_video_time(cfg):
     mods = [m.row_mods(m.blocks[0], t) for t in (tg, tg2)]
     for i in range(6):
         assert torch.equal(mods[0][i][:, lay.action], mods[1][i][:, lay.action])
-        assert torch.equal(mods[0][i][:, lay.text], mods[1][i][:, lay.text])
+        assert torch.equal(mods[0][i][:, lay.proprio], mods[1][i][:, lay.proprio])
         assert not torch.equal(mods[0][i][:, lay.video], mods[1][i][:, lay.video])
+        assert not torch.equal(mods[0][i][:, lay.text], mods[1][i][:, lay.text])

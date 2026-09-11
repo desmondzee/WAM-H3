@@ -40,7 +40,7 @@ class SequenceLayout:
 
         g = torch.zeros(self.N, dtype=torch.long)
         t = torch.zeros(self.N, dtype=torch.long)
-        g[self.obs], g[self.video], g[self.action] = 1, 2, 3
+        g[self.obs], g[self.text], g[self.video], g[self.action] = 1, 2, 2, 3
         t[self.text], t[self.proprio], t[self.action] = 1, 2, 2
         self.row_group, self.row_tag = g, t
 

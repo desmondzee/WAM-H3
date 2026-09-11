@@ -76,8 +76,9 @@ class WAMH3(nn.Module):
         noise = torch.randn(1, cfg.num_video_latents * cfg.frame_rows, cfg.video_patch_dim, generator=g).to(self.device, self.torch_dtype)
         sig, _ = self.sched_a.inference_schedule(num_inference_steps, sigma_shift)
         tg = torch.tensor([[1.0, cfg.obs_t, 1 - sig[0].item(), 0.0]], device=self.device)
-        cache = self.dit.prefill(inp["text"], inp["text_valid"], inp["obs_rows"], inp["proprio"], noise, tg)
-        a = self.dit.denoise_actions(cache, self.sched_a, num_inference_steps, generator=g, shift=sigma_shift)
+        with torch.autocast(self.device.type, dtype=self.torch_dtype, enabled=self.torch_dtype != torch.float32):
+            cache = self.dit.prefill(inp["text"], inp["text_valid"], inp["obs_rows"], inp["proprio"], noise, tg)
+            a = self.dit.denoise_actions(cache, self.sched_a, num_inference_steps, generator=g, shift=sigma_shift)
         return {"action": a[0].float().cpu()}
 
     def save_checkpoint(self, path, step, extra=None):

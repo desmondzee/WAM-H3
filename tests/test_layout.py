@@ -28,7 +28,7 @@ def test_slices_tile_sequence(cfg):
 def test_groups_and_tags(cfg):
     lay = SequenceLayout(cfg)
     g, t = lay.row_group, lay.row_tag
-    assert (g[lay.text] == 0).all() and (t[lay.text] == 1).all()
+    assert (g[lay.text] == 2).all() and (t[lay.text] == 1).all()
     assert (g[lay.obs] == 1).all() and (t[lay.obs] == 0).all()
     assert (g[lay.proprio] == 0).all() and (t[lay.proprio] == 2).all()
     assert (g[lay.video] == 2).all() and (t[lay.video] == 0).all()

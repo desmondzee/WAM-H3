@@ -54,3 +54,19 @@ def test_dataset_sample_layout(tmp_path):
     assert s["image_is_pad"].shape == (5,) and s["action_is_pad"].shape == (32,)
     assert (tmp_path / "dataset_stats.json").exists()
     assert json.loads((tmp_path / "dataset_stats.json").read_text())
+
+
+def test_collect_prompts_includes_benchmark_languages(monkeypatch):
+    import importlib.util, sys, types
+    spec = importlib.util.spec_from_file_location("precompute_text_embeds", ROOT / "scripts/precompute_text_embeds.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    task = types.SimpleNamespace
+    fake = types.ModuleType("libero.libero.benchmark")
+    fake.get_benchmark_dict = lambda: {"s": lambda: types.SimpleNamespace(tasks=[task(language="turn on the stove"), task(language="open the drawer")])}
+    for name in ("libero", "libero.libero"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    monkeypatch.setitem(sys.modules, "libero.libero.benchmark", fake)
+    from fasterwam.datasets.lerobot.robot_video_dataset import DEFAULT_PROMPT
+    out = mod.collect_prompts([], None, ["s"])
+    assert out == [DEFAULT_PROMPT.format(task="turn on the stove"), DEFAULT_PROMPT.format(task="open the drawer")]

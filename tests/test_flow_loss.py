@@ -59,10 +59,9 @@ def test_loss_finite_and_split(cfg):
     assert abs(loss.item() - parts["loss_video"] - parts["loss_action"]) < 1e-5
 
 
-def test_padded_rows_excluded_from_loss(cfg):
+def test_latent0_and_padded_rows_excluded_from_loss(cfg):
     m = WAMH3DiT(cfg)
     b = batch(cfg)
-    b["image_is_pad"][:, 1] = True
     b["action_is_pad"][:, 4:] = True
     fv, fa = FlowSchedule(), FlowSchedule()
     loss, _ = training_loss(m, b, fv, fa, generator=torch.Generator().manual_seed(1))
@@ -73,7 +72,7 @@ def test_padded_rows_excluded_from_loss(cfg):
     tg = torch.stack([torch.ones(2), torch.full((2,), cfg.obs_t), 1 - sv, 1 - sa], 1)
     out = m(b["text"], b["text_valid"], b["obs_rows"], b["proprio"], fa.add_noise(b["action"], na, sa),
             fv.add_noise(b["video_rows"], nv, sv), t_groups=tg)
-    ev = ((-out.video - (nv - b["video_rows"])) ** 2).mean(-1)[:, :cfg.frame_rows].mean(1)
+    ev = ((-out.video - (nv - b["video_rows"])) ** 2).mean(-1)[:, cfg.frame_rows:].mean(1)
     ea = ((-out.action - (na - b["action"])) ** 2).mean(-1)[:, :4].mean(1)
     expected = (ev * fv.training_weight(sv)).mean() + (ea * fa.training_weight(sa)).mean()
     assert torch.allclose(loss, expected, atol=1e-6)
