@@ -6,3 +6,7 @@ data/
 __pycache__/
 *.pyc
 .pytest_cache/
+runs_smoke.log
+*.log
+latency.json
+*.egg-info/
