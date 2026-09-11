@@ -43,7 +43,7 @@ class Rope(nn.Module):
         return 1.0 / (10000.0 ** (steps / self.inv_freq_len))
 
     def forward(self, position_ids):
-        pos = position_ids.to(torch.float32)
+        pos = position_ids.reshape(-1, 3).to(torch.float32)
         per_axis = pos.unsqueeze(-1) * self._inv_freq(pos.device).view(1, 1, -1)
         half = torch.cat(per_axis.unbind(dim=1), dim=-1)
         return torch.cat((half, half), dim=-1)
