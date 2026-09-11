@@ -11,7 +11,7 @@ def init_train(cfg):
     import wandb
     run = wandb.init(project=w.get("project", "wam-h3"), name=w.get("name") or cfg.task_name, mode=w.get("mode", "online"),
                      config=OmegaConf.to_container(cfg, resolve=True), dir=cfg.output_dir)
-    (Path(cfg.output_dir) / "wandb_run.json").write_text(json.dumps(dict(id=run.id, project=run.project, entity=run.entity)))
+    (Path(cfg.output_dir) / "wandb_run.json").write_text(json.dumps(dict(id=run.id, project=run.project, entity=run.entity, mode=w.get("mode", "online"))))
     return (lambda metrics, step: run.log(metrics, step=step)), run.finish
 
 
@@ -28,8 +28,11 @@ def log_eval(run_dir, benchmark, step, summary):
     f = Path(run_dir) / "wandb_run.json"
     if not f.exists():
         return
-    import wandb
-    r = json.loads(f.read_text())
-    run = wandb.init(id=r["id"], project=r["project"], entity=r["entity"], resume="allow")
-    run.log(eval_metrics(benchmark, step, summary))
-    run.finish()
+    try:
+        import wandb
+        r = json.loads(f.read_text())
+        run = wandb.init(id=r["id"], project=r["project"], entity=r["entity"], mode=r.get("mode", "online"), resume="allow")
+        run.log(eval_metrics(benchmark, step, summary))
+        run.finish()
+    except Exception as e:
+        print(f"wandb eval logging skipped: {e}")
