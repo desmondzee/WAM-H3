@@ -14,9 +14,13 @@ World Action Model on the MiniMax-H3 33B omni-transformer. Actions occupy H3's a
 git clone --recurse-submodules https://github.com/desmondzee/WAM-H3 && cd WAM-H3
 bash scripts/setup_core.sh      # venv, weights, LIBERO data, simulators, text embeddings, tests
 uv run wandb login              # once per machine, before any dev/full run (or export WANDB_API_KEY)
-bash scripts/run_dev.sh         # 1 GPU: rank-16 LoRA on libero_spatial, 3000 steps, then LIBERO + LIBERO-Plus eval
-bash scripts/run_full.sh        # 8 GPUs: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
+bash scripts/run_dev.sh         # 1x80 GB: rank-16 LoRA on libero_spatial, 600 steps at global batch 128, then LIBERO + LIBERO-Plus eval
+bash scripts/run_1gpu.sh        # 1x96 GB: rank-64 LoRA (AdaLN rank 16) on all 4 suites, 900 steps (~15 h), then eval
+bash scripts/run_full.sh        # 8x80 GB: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
+bash scripts/run_1gpu.sh        # 1x 96 GB (RTX PRO 6000): rank-64 LoRA (AdaLN rank 16) on all 4 suites in a 15.5 h budget, then eval
 ```
+
+`model.lora_adaln_r` gives `adaln_proj.linear` its own LoRA rank (its only input is the timestep embedding), with alpha scaled so alpha/r stays the same.
 
 Optional: `bash scripts/smoke_test.sh` (tiny random DiT, real VAE, 8 steps + 1 sim trial + latency; also runs on CPU).
 
@@ -52,7 +56,7 @@ uv run pytest tests -q
 
 Video loss weight is centred at σ=1 with σ_v=1 sampled 30% of the time (`model.video_weight_center`, `model.video_full_noise_prob`); see the spec for why this departs from FasterWAM.
 `model.ctx_sees_video=false` switches text/obs rows to FasterWAM's first-frame-causal mask (default lets them read the noisy future like H3 pretraining). Training logs `v1` = video loss on the σ_v=1 samples, the inference condition.
-Hydra overrides work everywhere: `train.batch_size=8 train.grad_accum=2`, `model.lora_r=64 model.lora_alpha=64 model.lora_dropout=0.05 'model.lora_targets=[attn.qkv_proj,attn.out_proj]'`, `EVALUATION.num_trials=20`. Training also logs `train/grad_norm` (pre-clip), `train/grad_var` (trace of the per-micro-batch gradient covariance) and `train/grad_noise_scale` (B_simple: the batch size at which gradient noise equals signal; single-process runs only).
+Hydra overrides work everywhere: `train.batch_size=8 train.grad_accum=2`, `model.lora_r=64 model.lora_alpha=64 model.lora_adaln_r=16 model.lora_dropout=0.05 'model.lora_targets=[attn.qkv_proj,attn.out_proj]'`, `EVALUATION.num_trials=20`. Training also logs `train/grad_norm` (pre-clip), `train/grad_var` (trace of the per-micro-batch gradient covariance) and `train/grad_noise_scale` (B_simple: the batch size at which gradient noise equals signal; single-process runs only).
 `eval_libero.sh` first caches every task instruction of the benchmark (`precompute_text_embeds.py --benchmark-suites ...`, one encoder load on the eval GPU), so LIBERO-Plus's rewritten instructions are covered; other prompts can be added with `--prompts-file`.
 
 ## Layout

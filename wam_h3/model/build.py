@@ -37,8 +37,8 @@ def build_dit(cfg, transformer_dir, device, dtype):
 
 
 def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, action_video_freq_ratio, text_len,
-                 lora_r=None, lora_alpha=None, lora_targets=TARGETS, lora_dropout=0.0, tiny=False, text_cache_dir=None, load_text_encoder=False,
-                 device=None, dtype="bfloat16", shift=5.0, video_weight_center=1.0, video_full_noise_prob=0.3, ctx_sees_video=True):
+                 lora_r=None, lora_alpha=None, lora_targets=TARGETS, lora_dropout=0.0, lora_adaln_r=None, tiny=False,
+                 text_cache_dir=None, load_text_encoder=False, device=None, dtype="bfloat16", shift=5.0, video_weight_center=1.0, video_full_noise_prob=0.3, ctx_sees_video=True):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dtype = getattr(torch, dtype) if isinstance(dtype, str) else dtype
     root = Path(weights_root)
@@ -53,7 +53,7 @@ def create_wamh3(weights_root, action_dim, proprio_dim, video_size, num_frames, 
         dit = build_dit(cfg, root / "transformer", device, dtype)
     assert cfg.num_frames == n_video, (cfg.num_frames, n_video)
     if lora_r:
-        apply_lora(dit, lora_r, lora_alpha, tuple(lora_targets), lora_dropout)
+        apply_lora(dit, lora_r, lora_alpha, tuple(lora_targets), lora_dropout, adaln_r=lora_adaln_r)
         for p in dit.parameters():
             if p.requires_grad:
                 p.data = p.data.float()

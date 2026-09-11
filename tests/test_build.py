@@ -64,3 +64,15 @@ def test_task_configs_compose():
     assert list(dev.model.lora_targets) == list(full.model.lora_targets) and dev.model.lora_dropout == 0.0
     assert len(dev.data.train.dataset_dirs) == 1 and len(full.data.train.dataset_dirs) == 4
     assert dev.train.save_every == 100 and full.train.save_every == 2000
+
+
+def test_single_gpu_task_config():
+    with initialize_config_dir(version_base=None, config_dir=str(ROOT / "configs")):
+        one = compose(config_name="train", overrides=["task=libero_wamh3_1gpu"])
+        tiny = compose(config_name="train", overrides=["task=smoke_libero_tiny", "model.lora_r=8", "model.lora_adaln_r=2"])
+    assert one.model.lora_r == one.model.lora_alpha == 64 and one.model.lora_adaln_r == 16
+    assert one.train.batch_size == 2 and one.train.grad_accum == 64 and one.train.max_steps == 900
+    assert len(one.data.train.dataset_dirs) == 4
+    m = instantiate(tiny.model)
+    assert m.dit.blocks[0].adaln_proj.linear.lora_A["default"].weight.shape[0] == 2
+    assert m.dit.blocks[0].attn.qkv_proj.lora_A["default"].weight.shape[0] == 8

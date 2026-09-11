@@ -54,6 +54,17 @@ def test_trainable_checkpoint_roundtrip(cfg, tmp_path):
     assert torch.allclose(m(**inp, t_groups=tg).hidden, m2(**inp, t_groups=tg).hidden)
 
 
+def test_adaln_rank_override_keeps_scale(cfg):
+    m = apply_lora(WAMH3DiT(cfg), r=8, alpha=16, adaln_r=2)
+    blk = m.blocks[0]
+    assert blk.adaln_proj.linear.lora_A["default"].weight.shape[0] == 2
+    assert blk.attn.qkv_proj.lora_A["default"].weight.shape[0] == 8 and blk.mlp.fc2.lora_B["default"].weight.shape[1] == 8
+    assert m.token_refiner.blocks[0].attn.qkv_proj.lora_A["default"].weight.shape[0] == 8
+    assert blk.adaln_proj.linear.scaling["default"] == blk.attn.qkv_proj.scaling["default"] == 2.0
+    plain = apply_lora(WAMH3DiT(cfg), r=8, adaln_r=8)
+    assert plain.blocks[0].adaln_proj.linear.lora_A["default"].weight.shape[0] == 8
+
+
 def test_lora_targets_configurable(cfg):
     m = apply_lora(WAMH3DiT(cfg), r=4, targets=("attn.qkv_proj",), dropout=0.1)
     assert sum(1 for mod in m.modules() if hasattr(mod, "lora_A")) == cfg.num_layers + cfg.token_refiner_num_layers

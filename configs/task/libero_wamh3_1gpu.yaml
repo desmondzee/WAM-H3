@@ -1,0 +1,14 @@
+# @package _global_
+# one 96 GB GPU, all four suites, ~15 h at ~60 s/step
+task_name: libero_wamh3_1gpu
+model:
+  lora_r: 64
+  lora_alpha: 64
+  lora_adaln_r: 16
+train:
+  batch_size: 2
+  grad_accum: 64
+  num_workers: 8
+  max_steps: 900
+  save_every: 100
+  log_every: 1
