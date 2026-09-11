@@ -82,3 +82,19 @@ def test_trainer_logs_metrics_each_step(tmp_path):
     assert [s for s, _ in seen] == [1, 2, 3]
     assert {"train/loss", "train/loss_video", "train/loss_video_full_noise", "train/loss_action", "train/grad_norm", "train/lr",
             "train/epoch", "train/steps_per_sec"} <= set(seen[0][1])
+
+
+def test_run_training_end_to_end(tmp_path, monkeypatch):
+    from omegaconf import OmegaConf
+    from wam_h3.train import runtime
+
+    monkeypatch.setenv("ACCELERATE_USE_CPU", "true")
+    model = make(tmp_path, r=4)
+    ds = ListDataset(model.cfg)
+    monkeypatch.setattr(runtime, "instantiate", lambda c, **kw: model if "lora_r" in c else ds)
+    cfg = train_cfg(tmp_path, max_steps=2, save_every=0)
+    cfg.model, cfg.data = OmegaConf.create({"lora_r": 4}), OmegaConf.create({"train": {}})
+    cfg.task_name = "t"
+    runtime.run_training(cfg)
+    assert (tmp_path / "run/checkpoints/step_000002/adapter.safetensors").exists()
+    assert (tmp_path / "run/config.yaml").exists()

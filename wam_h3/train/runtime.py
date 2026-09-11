@@ -13,8 +13,8 @@ from .wandb_log import init_train
 
 def run_training(cfg):
     misc.register_work_dir(cfg.output_dir)
-    set_seed(cfg.seed, device_specific=True)
     acc = Accelerator(mixed_precision="bf16", gradient_accumulation_steps=cfg.train.grad_accum)
+    set_seed(cfg.seed, device_specific=True)
     if acc.is_main_process:
         Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
         OmegaConf.save(cfg, Path(cfg.output_dir) / "config.yaml", resolve=True)
