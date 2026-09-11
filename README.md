@@ -16,7 +16,7 @@ bash scripts/setup_core.sh      # venv, weights, LIBERO data, simulators, text e
 uv run wandb login              # once per machine, before any dev/full run (or export WANDB_API_KEY)
 bash scripts/run_dev.sh         # 1x80 GB: rank-16 LoRA on libero_spatial, 600 steps at global batch 128, then LIBERO + LIBERO-Plus eval
 bash scripts/run_1gpu.sh        # 1x96 GB: rank-64 LoRA (AdaLN rank 16) on all 4 suites, 1 epoch (2200 steps), then eval
-bash scripts/train_fsdp.sh 2 task=libero_wamh3_2gpu   # 2x80 GB: rank-64 LoRA (AdaLN 16) on libero_spatial, 3 epochs at global batch 128
+bash scripts/train_fsdp.sh 2 task=libero_wamh3_2gpu   # 2x80 GB: rank-128 LoRA (AdaLN 16) on libero_spatial, ~5 epochs at global batch 128
 bash scripts/run_full.sh        # 8x80 GB: rank-128 LoRA on all 4 suites, 21.7k steps, then eval
 ```
 

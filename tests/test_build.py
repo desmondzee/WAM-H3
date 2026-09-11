@@ -69,8 +69,8 @@ def test_task_configs_compose():
 def test_two_gpu_task_config():
     with initialize_config_dir(version_base=None, config_dir=str(ROOT / "configs")):
         two = compose(config_name="train", overrides=["task=libero_wamh3_2gpu"])
-    assert two.train.batch_size * two.train.grad_accum == 64 and two.model.lora_r == 64 and two.model.lora_adaln_r == 16
-    assert two.train.max_steps == 1250 and len(two.data.train.dataset_dirs) == 1
+    assert two.train.batch_size * two.train.grad_accum == 64 and two.model.lora_r == 128 and two.model.lora_adaln_r == 16
+    assert two.train.max_steps == 2000 and len(two.data.train.dataset_dirs) == 1
 
 
 def test_single_gpu_task_config():
