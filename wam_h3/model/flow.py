@@ -14,7 +14,7 @@ class FlowSchedule:
         self.norm = float((y - self.y_min).mean())
 
     def _bump(self, sigma):
-        return torch.exp(-2.0 * (sigma.to(torch.float64) - self.center) ** 2)
+        return torch.exp(-2.0 * (sigma.float() - self.center) ** 2)
 
     def sample_sigma(self, B, device, generator=None):
         return _phi(torch.rand(B, device=device, generator=generator), self.shift)
