@@ -28,6 +28,13 @@ class DiTOutput:
     hidden: torch.Tensor
 
 
+@dataclass
+class KVCache:
+    kv: list
+    text_valid: torch.Tensor
+    t_groups: torch.Tensor
+
+
 class WAMH3DiT(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -45,6 +52,10 @@ class WAMH3DiT(nn.Module):
         self.register_buffer("position_ids", self.layout.position_ids, persistent=False)
         self.register_buffer("row_group", self.layout.row_group, persistent=False)
         self.register_buffer("row_tag", self.layout.row_tag, persistent=False)
+        lay = self.layout
+        self.register_buffer("ctx_rows", torch.cat([torch.arange(0, lay.action.start),
+                                                    torch.arange(lay.video.start, lay.video.stop)]), persistent=False)
+        self.register_buffer("action_rows", torch.arange(lay.action.start, lay.action.stop), persistent=False)
 
     def freqs(self, rows=None):
         f = self.rope(self.position_ids[None])
@@ -86,3 +97,39 @@ class WAMH3DiT(nn.Module):
             x, _ = blk(x, t_emb, idx, freqs, mask)
         h = self.final_layer(x, t_emb, fidx)
         return DiTOutput(self.final_layer.video_out(h[:, lay.video]), self.final_layer.action_out(h[:, lay.action]), x)
+
+    def prefill(self, text, text_valid, obs_rows, proprio, video_rows, t_groups):
+        dtype = self.condition_proj.weight.dtype
+        x = torch.cat(self.embed_ctx(text, text_valid, obs_rows, proprio) + [self.video_patch_proj(video_rows.to(dtype))], dim=1)
+        B, rows = x.shape[0], self.ctx_rows
+        t_emb = self.t_emb(t_groups, dtype)
+        idx, _ = self.row_index(B, rows)
+        freqs = self.freqs(rows)
+        mask = self.layout.full_mask(text_valid)[:, :, rows][:, :, :, rows]
+        kvs = []
+        for blk in self.blocks:
+            x, kv = blk(x, t_emb, idx, freqs, mask)
+            kvs.append(kv)
+        return KVCache(kvs, text_valid, t_groups)
+
+    def denoise_action_step(self, cache, action, t_a):
+        dtype = self.condition_proj.weight.dtype
+        x = self.action_in(action.to(dtype))
+        B, rows = x.shape[0], self.action_rows
+        t_groups = torch.cat([cache.t_groups[:, :3], t_a[:, None].to(cache.t_groups)], dim=1)
+        t_emb = self.t_emb(t_groups, dtype)
+        idx, fidx = self.row_index(B, rows)
+        freqs = self.freqs(rows)
+        mask = self.layout.action_query_mask(cache.text_valid)
+        for blk, kv in zip(self.blocks, cache.kv):
+            x, _ = blk(x, t_emb, idx, freqs, mask, kv_ctx=kv, ctx_insert=self.layout.ctx_insert)
+        return self.final_layer.action_out(self.final_layer(x, t_emb, fidx))
+
+    def denoise_actions(self, cache, sched, steps=10, generator=None, shift=None):
+        B, dev = cache.text_valid.shape[0], cache.text_valid.device
+        x = torch.randn(B, self.cfg.action_horizon, self.cfg.action_dim, generator=generator).to(dev)
+        sig, dl = sched.inference_schedule(steps, shift)
+        for s, d in zip(sig, dl):
+            pred = -self.denoise_action_step(cache, x, torch.full((B,), 1 - s.item(), device=dev))
+            x = sched.step(pred.float(), d, x)
+        return x
