@@ -65,8 +65,9 @@ def main():
     restore(model, old)
 
     tag = model.dit.row_tag.clone()
-    model.dit.row_tag[model.dit.layout.action] = 0
-    r["action_rows_with_video_adaln_slot"] = open_loop(model, samples, a.steps, a.seed)
+    for name, t in (("video", 0), ("text", 1)):
+        model.dit.row_tag[model.dit.layout.action] = t
+        r[f"action_rows_with_{name}_adaln_slot"] = open_loop(model, samples, a.steps, a.seed)
     model.dit.row_tag.copy_(tag)
 
     batch = {k: torch.stack([s[k] for s in samples[:8]]) for k in ("video", "action", "proprio", "context", "context_mask", "image_is_pad", "action_is_pad")}
