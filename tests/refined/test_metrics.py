@@ -146,3 +146,66 @@ def test_fp32_detached_state_and_unchanged_model_gradients():
     fp32 = LossAccumulator(torch.ones(7))
     fp32.update(large, torch.zeros_like(large), torch.ones(1, 1, dtype=torch.bool))
     assert fp32.finish("train")["train/loss_by_component/component_0"] == 90000
+    assert fp32.finish("train")["train/mae_by_component/component_0"] == 300
+
+
+@pytest.mark.parametrize("prefix", ["train", "validation"])
+def test_mae_signed_residuals_variable_lengths_masks_and_absolute_raw_scale(prefix):
+    components = torch.arange(1, 8).float()
+    scale = torch.tensor([-2, 3, -4, 0.5, -0.25, 0, 7]).requires_grad_()
+    accumulator = LossAccumulator(scale)
+    partitioned = LossAccumulator(scale)
+    expected_chunks = []
+    for amplitudes, mask in (
+        ([[-1, 3, 0, 0], [-6, 0, 0, 0], [0, 0, 0, 0]],
+         [[True, True, False, False], [True, False, False, False], [False] * 4]),
+        ([[2, 0, -4]], [[True, False, True]]),
+    ):
+        residual = torch.tensor(amplitudes).float().unsqueeze(-1) * components
+        target = torch.full_like(residual, 5)
+        prediction = target + residual
+        valid = torch.tensor(mask)
+        prediction[~valid] = float("nan")
+        target[~valid] = float("nan")
+        prediction.requires_grad_()
+        target.requires_grad_()
+        accumulator.update(prediction, target, valid)
+        for start in range(len(prediction)):
+            partitioned.update(prediction[start:start + 1], target[start:start + 1],
+                               valid[start:start + 1], chunk_start=start)
+            if valid[start].any():
+                expected_chunks.append(residual[start, valid[start]].abs().mean().item())
+        assert prediction.grad is None
+        assert target.grad is None
+    metrics = accumulator.finish(prefix)
+    assert partitioned.finish(prefix) == pytest.approx(metrics)
+    assert all(key.startswith(f"{prefix}/") for key in metrics)
+    assert all(math.isfinite(value) for value in metrics.values())
+    assert metrics[f"{prefix}/component_chunk_count"] == 3
+    normalized = components * (11 / 3)
+    raw = normalized * scale.detach().abs()
+    for root, expected in ((prefix, normalized), (f"{prefix}/raw_action_mae", raw)):
+        for i, value in enumerate(expected.tolist()):
+            assert metrics[f"{root}/mae_by_component/component_{i}"] == pytest.approx(value)
+        for group, indices in (("translation", slice(0, 3)), ("rotation", slice(3, 6)), ("gripper", slice(6, 7))):
+            assert metrics[f"{root}/mae_groups/{group}"] == pytest.approx(expected[indices].mean().item())
+        assert metrics[f"{root}/mae"] == pytest.approx(expected.mean().item())
+    assert metrics[f"{prefix}/mae"] == pytest.approx(sum(expected_chunks) / len(expected_chunks))
+    assert metrics[f"{prefix}/mae_by_component/component_0"] != pytest.approx(
+        math.sqrt(metrics[f"{prefix}/loss_by_component/component_0"]))
+    assert scale.grad is None
+    for value in vars(accumulator).values():
+        assert value.dtype == torch.float32
+        assert not value.requires_grad
+        assert value.grad_fn is None
+
+
+@pytest.mark.parametrize("prefix", ["train", "validation"])
+def test_mae_all_empty_chunks_omit_values(prefix):
+    accumulator = LossAccumulator(torch.ones(7))
+    prediction = torch.full((2, 3, 7), float("nan"))
+    accumulator.update(prediction, prediction, torch.zeros(2, 3, dtype=torch.bool))
+    metrics = accumulator.finish(prefix)
+    assert metrics[f"{prefix}/component_chunk_count"] == 0
+    assert all("/mae" not in key and "/loss_" not in key for key in metrics)
+    assert all(value == 0 for value in metrics.values())

@@ -10,7 +10,8 @@ class LossAccumulator:
     """
 
     def __init__(self, scale):
-        self.scale_squared = scale.detach().float().square()
+        self.scale_absolute = scale.detach().float().abs()
+        self.scale_squared = self.scale_absolute.square()
         if self.scale_squared.shape != (7,):
             raise ValueError("Action normalizer scale must have seven components")
         self.chunk_sums = self.scale_squared.new_zeros(0)
@@ -18,6 +19,7 @@ class LossAccumulator:
         self.horizon_sums = self.scale_squared.new_zeros(0)
         self.horizon_counts = self.scale_squared.new_zeros(0)
         self.component_sums = self.scale_squared.new_zeros(7)
+        self.component_mae_sums = self.scale_squared.new_zeros(7)
 
     @staticmethod
     def _grow(values, size):
@@ -34,9 +36,12 @@ class LossAccumulator:
         invalid = ~valid.unsqueeze(-1)
         predicted = prediction.detach().float().masked_fill(invalid, 0)
         targets = target.detach().float().masked_fill(invalid, 0)
-        error = (predicted - targets).square()
+        residual = predicted - targets
+        error = residual.square()
         counts = valid.sum(-1)
         components = error.sum(1) / counts.clamp_min(1).unsqueeze(-1)
+        component_mae = residual.abs().sum(1) / counts.clamp_min(1).unsqueeze(-1)
+        self.component_mae_sums.add_(component_mae.sum(0))
         end = chunk_start + len(prediction)
         self.chunk_sums = self._grow(self.chunk_sums, end)
         self.chunk_counts = self._grow(self.chunk_counts, end)
@@ -69,6 +74,17 @@ class LossAccumulator:
             values.append(component_values)
             names.extend(f"{root}/loss_groups/{group}" for group in ("translation", "rotation", "gripper"))
             values.append(torch.stack((component_values[:3].mean(), component_values[3:6].mean(), component_values[6])))
+        mae_components = self.component_mae_sums / chunks.clamp_min(1)
+        for root, component_values in (
+            (prefix, mae_components),
+            (f"{prefix}/raw_action_mae", mae_components * self.scale_absolute),
+        ):
+            names.extend(f"{root}/mae_by_component/component_{i}" for i in range(7))
+            values.append(component_values)
+            names.extend(f"{root}/mae_groups/{group}" for group in ("translation", "rotation", "gripper"))
+            values.append(torch.stack((component_values[:3].mean(), component_values[3:6].mean(), component_values[6])))
+            names.append(f"{root}/mae")
+            values.append(component_values.mean().unsqueeze(0))
         names.append(f"{prefix}/component_chunk_count")
         values.append(chunks.unsqueeze(0))
         metrics = dict(zip(names, torch.cat(values).cpu().tolist()))
@@ -78,5 +94,5 @@ class LossAccumulator:
                 if metrics[f"{prefix}/count_by_{axis}/{label}_{i}"] == 0:
                     del metrics[f"{prefix}/loss_by_{axis}/{label}_{i}"]
         if metrics[f"{prefix}/component_chunk_count"] == 0:
-            metrics = {key: value for key, value in metrics.items() if "/loss_" not in key}
+            metrics = {key: value for key, value in metrics.items() if "/loss_" not in key and "/mae" not in key}
         return metrics
