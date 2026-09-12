@@ -1,0 +1,31 @@
+seed: 0
+prompt_variants: [minimal, camera, constraints, physical]
+source_device: cuda:0
+target_device: cuda:1
+max_steps: 10
+target_chunks: 64
+split_manifest: null
+max_seconds: null
+validation_every: 10
+checkpoint_every: 10
+lr: 0.0001
+weight_decay: 0.01
+max_grad_norm: 1.0
+overlap: true
+resume: null
+wandb:
+  enabled: false
+  project: wam-h3
+  name: refined-training-smoke
+generation_review: runs/refined_generation/smoke/review.json
+caches:
+  - data/refined/official_spatial_smoke/episode_000000_camera.pt
+  - data/refined/official_spatial_smoke/episode_000001_camera.pt
+  - data/refined/official_spatial_smoke/episode_000002_camera.pt
+  - data/refined/official_spatial_smoke/episode_000003_camera.pt
+output_dir: runs/refined_action_policy/${now:%Y%m%d_%H%M%S}
+hydra:
+  run:
+    dir: ${output_dir}
+  job:
+    chdir: false
