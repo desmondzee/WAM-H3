@@ -166,6 +166,48 @@ def test_prompt_variants_default_config():
     validate_config(cfg)
 
 
+def test_lr_schedule_endpoints_and_monotonicity():
+    from wam_h3.refined.trainer import learning_rate_for_update, lr_schedule_config
+    cfg = OmegaConf.load("configs/refined_train.yaml")
+    assert lr_schedule_config(cfg) is None
+    cfg.lr_schedule.enabled = True
+    cfg.max_steps = 60
+    schedule = lr_schedule_config(cfg)
+    rates = [learning_rate_for_update(cfg.lr, schedule, u) for u in range(1, 61)]
+    assert rates[0] == 1e-5
+    assert rates[4] == 1e-4
+    assert rates[59] == 1e-5
+    assert all(a < b for a, b in zip(rates[:4], rates[1:5]))
+    assert all(a > b for a, b in zip(rates[4:-1], rates[5:]))
+    assert learning_rate_for_update(cfg.lr, schedule, 61) == 1e-5
+    cfg.lr_schedule = None
+    assert lr_schedule_config(cfg) is None
+    assert learning_rate_for_update(cfg.lr, None, 60) == cfg.lr
+
+
+@pytest.mark.parametrize("key,value", [("warmup_steps", 1), ("warmup_steps", 60), ("warmup_steps", 5.5),
+                                      ("total_steps", 5), ("total_steps", True), ("start_lr", 0),
+                                      ("start_lr", float("nan")), ("start_lr", 0.001),
+                                      ("min_lr", -1), ("min_lr", float("inf")), ("min_lr", 0.001),
+                                      ("enabled", "true")])
+def test_invalid_lr_schedule(key, value):
+    from wam_h3.refined.trainer import validate_config
+    cfg = OmegaConf.load("configs/refined_train.yaml")
+    cfg.lr_schedule.enabled = True
+    cfg.lr_schedule[key] = value
+    with pytest.raises(ValueError, match="lr_schedule"):
+        validate_config(cfg)
+
+
+def test_lr_schedule_rejects_excess_max_steps():
+    from wam_h3.refined.trainer import validate_config
+    cfg = OmegaConf.load("configs/refined_train.yaml")
+    cfg.lr_schedule.enabled = True
+    cfg.max_steps = 61
+    with pytest.raises(ValueError, match="max_steps"):
+        validate_config(cfg)
+
+
 def test_unequal_episode_chunk_gradient_equivalence():
     from wam_h3.refined.policy import chunk_masked_loss
     from wam_h3.refined.trainer import scale_gradients
@@ -239,9 +281,10 @@ def test_split_rejects_physical_leakage(tmp_path, monkeypatch, same_demo):
         trainer.load_splits(split_config(tmp_path, train_path, validation_path))
 
 
+@pytest.mark.parametrize("scheduled", [False, True])
 @pytest.mark.parametrize("variants", [None, ["minimal", "camera", "constraints", "physical"]])
 @pytest.mark.parametrize("budget", [7, 10, None])
-def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch, budget, variants):
+def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch, budget, variants, scheduled):
     from wam_h3.refined import trainer
     train_path, validation_path = tmp_path / "train.pt", tmp_path / "validation.pt"
     samples = {str(train_path): cache_sample("demo_0", chunks=2, value=1.0),
@@ -252,6 +295,22 @@ def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch,
                         max_seconds=budget, validation_every=10 if budget is None else 1, checkpoint_every=1, lr=0.01,
                         weight_decay=0.01, max_grad_norm=1.0, resume=None, overlap=True,
                         output_dir=str(tmp_path / "run"), generation_review=str(tmp_path / "review.json"))
+    if scheduled:
+        cfg.lr = 1e-4
+        cfg.lr_schedule = dict(warmup_steps=5, start_lr=1e-5, min_lr=1e-5, total_steps=60)
+    lr_calls = []
+    applied = []
+    original_lr = trainer.learning_rate_for_update
+    original_step = torch.optim.AdamW.step
+    def update_lr(peak, schedule, update):
+        lr_calls.append(update)
+        return original_lr(peak, schedule, update)
+    def optimizer_step(optimizer, *args, **kwargs):
+        assert len(lr_calls) == len(applied) + 1
+        applied.append(optimizer.param_groups[0]["lr"])
+        return original_step(optimizer, *args, **kwargs)
+    monkeypatch.setattr(trainer, "learning_rate_for_update", update_lr)
+    monkeypatch.setattr(torch.optim.AdamW, "step", optimizer_step)
     if variants is not None:
         cfg.prompt_variants = variants
     (tmp_path / "review.json").write_text(json.dumps(dict(status="approved", model_revision=trainer.MODEL_REVISION)))
@@ -286,9 +345,20 @@ def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch,
     assert visits == expected_visits(0, 2) + ([] if budget == 7 else [(str(validation_path), False)])
     batch = next(m for m in metrics if "loss" in m)
     assert (batch["chunks"], batch["episodes"], batch["valid_timesteps"]) == (4, 2, 12)
+    assert batch["train/component_chunk_count"] == batch["chunks"]
+    assert batch["train/count_by_chunk/action_chunk_0"] == 2
+    assert batch["train/count_by_chunk/action_chunk_1"] == 2
+    assert batch["train/count_by_horizon/action_unit_0"] == 4
+    assert sum(batch[f"train/loss_by_component/component_{i}"] for i in range(7)) / 7 == pytest.approx(batch["loss"])
+    assert lr_calls == [1]
+    assert applied == [batch["lr"]] == [1e-5 if scheduled else cfg.lr]
     if budget != 7:
         assert batch["validation/chunks"] == 1
         assert batch["validation/loss"] > 9000
+        assert batch["validation/component_chunk_count"] == 1
+        assert batch["validation/count_by_chunk/action_chunk_0"] == 1
+        assert batch["validation/count_by_horizon/action_unit_0"] == 1
+        assert sum(batch[f"validation/loss_by_component/component_{i}"] for i in range(7)) / 7 == pytest.approx(batch["validation/loss"])
     else:
         assert "validation/loss" not in batch
     assert metrics[-1]["stop_reason"] == ("max_steps" if budget is None else "max_seconds")
@@ -297,6 +367,7 @@ def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch,
     state = torch.load(checkpoints[0] / "training.pt", weights_only=True)
     assert state["sampler"]["visited"] == 2
     assert state["train_config"].get("prompt_variants") == variants
+    assert state["train_config"].get("lr_schedule") == getattr(cfg, "lr_schedule", None)
     torch.testing.assert_close(state["normalizer"]["center"], torch.zeros(7))
     torch.testing.assert_close(state["normalizer"]["scale"], torch.ones(7))
     with pytest.raises(FileExistsError):
@@ -313,6 +384,13 @@ def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch,
             with pytest.raises(ValueError, match="configuration differs"):
                 trainer.train(cfg)
             cfg.prompt_variants = variants
+        if scheduled:
+            for changed in (None, dict(cfg.lr_schedule, total_steps=61)):
+                original_schedule = cfg.lr_schedule
+                cfg.lr_schedule = changed
+                with pytest.raises(ValueError, match="configuration differs"):
+                    trainer.train(cfg)
+                cfg.lr_schedule = original_schedule
         cfg.resume, cfg.output_dir = None, str(tmp_path / "reference")
         visits.clear()
         trainer.train(cfg)
@@ -321,6 +399,10 @@ def test_train_normalizer_validation_and_timed_checkpoint(tmp_path, monkeypatch,
         actual = load_file(str(tmp_path / "resumed" / "step_000002" / "policy.safetensors"))
         expected = load_file(str(tmp_path / "reference" / "step_000002" / "policy.safetensors"))
         torch.testing.assert_close(actual["value"], expected["value"], atol=0, rtol=0)
+        assert lr_calls == [1, 2, 1, 2]
+        assert applied[:2] == applied[2:]
+        if scheduled:
+            assert applied[1] == original_lr(cfg.lr, cfg.lr_schedule, 2)
 
 
 @pytest.mark.parametrize("name,value", [("target_chunks", 0), ("max_seconds", -1), ("validation_every", 0), ("lr", float("nan")),

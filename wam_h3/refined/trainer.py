@@ -12,6 +12,7 @@ import torch
 from safetensors.torch import load_file, save_file
 
 from .cache import load_policy_cache
+from .metrics import LossAccumulator
 from .pipeline import feature_batches
 from .policy import ActionPolicy, PolicyConfig, chunk_masked_loss
 from .runtime import MODEL_REVISION
@@ -194,6 +195,46 @@ def load_splits(cfg):
     return training, validation, manifest
 
 
+def lr_schedule_config(cfg):
+    schedule = getattr(cfg, "lr_schedule", None)
+    if schedule is None:
+        return None
+    from collections.abc import Mapping
+    if not isinstance(schedule, Mapping):
+        raise ValueError("lr_schedule must be a mapping or null")
+    if not isinstance(schedule.get("enabled", True), bool):
+        raise ValueError("lr_schedule.enabled must be boolean")
+    if not schedule.get("enabled", True):
+        return None
+    schedule = dict(schedule)
+    for name in ("warmup_steps", "total_steps"):
+        value = schedule.get(name)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"lr_schedule.{name} must be an integer")
+    if not 2 <= schedule["warmup_steps"] < schedule["total_steps"]:
+        raise ValueError("lr_schedule requires total_steps > warmup_steps >= 2")
+    for name in ("start_lr", "min_lr"):
+        value = schedule.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value <= cfg.lr:
+            raise ValueError(f"lr_schedule.{name} must be finite, positive, and <= lr")
+    if cfg.max_steps > schedule["total_steps"]:
+        raise ValueError("max_steps must not exceed lr_schedule.total_steps")
+    return {name: schedule[name] for name in ("warmup_steps", "start_lr", "min_lr", "total_steps")}
+
+
+def learning_rate_for_update(peak_lr, schedule, update):
+    if isinstance(update, bool) or not isinstance(update, int) or update < 1:
+        raise ValueError("Optimizer update must be a positive integer")
+    if schedule is None:
+        return peak_lr
+    warmup, total = schedule["warmup_steps"], schedule["total_steps"]
+    if update <= warmup:
+        return schedule["start_lr"] + (peak_lr - schedule["start_lr"]) * (update - 1) / (warmup - 1)
+    if update >= total:
+        return schedule["min_lr"]
+    return schedule["min_lr"] + 0.5 * (peak_lr - schedule["min_lr"]) * (1 + math.cos(math.pi * (update - warmup) / (total - warmup)))
+
+
 def validate_config(cfg):
     for name, default in (("max_steps", None), ("target_chunks", 64), ("validation_every", 10), ("checkpoint_every", 10)):
         value = getattr(cfg, name, default)
@@ -204,6 +245,7 @@ def validate_config(cfg):
             raise ValueError(f"{name} must be finite and positive")
     if not math.isfinite(cfg.weight_decay) or cfg.weight_decay < 0:
         raise ValueError("weight_decay must be finite and nonnegative")
+    lr_schedule_config(cfg)
     budget = getattr(cfg, "max_seconds", None)
     if budget is not None and (not math.isfinite(budget) or budget <= 0):
         raise ValueError("max_seconds must be finite and positive or null")
@@ -244,6 +286,9 @@ def train(cfg, log_metrics=None):
     identities = dict(train=[r["identity"] for r in training], validation=[r["identity"] for r in validation], split=manifest)
     train_config = dict(seed=cfg.seed, target_chunks=getattr(cfg, "target_chunks", 64), lr=cfg.lr,
                         weight_decay=cfg.weight_decay, max_grad_norm=cfg.max_grad_norm)
+    schedule = lr_schedule_config(cfg)
+    if schedule is not None:
+        train_config["lr_schedule"] = schedule
     if hasattr(cfg, "prompt_variants"):
         train_config["prompt_variants"] = list(cfg.prompt_variants)
     from omegaconf import OmegaConf
@@ -259,7 +304,8 @@ def train(cfg, log_metrics=None):
     if cfg.resume:
         state = load_checkpoint(cfg.resume, model, optimizer, identities)
         step, normalizer = state["step"], state["normalizer"]
-        if state.get("train_config") is not None and state["train_config"] != train_config:
+        if (state.get("train_config") is not None and state["train_config"] != train_config
+                or schedule is not None and state.get("train_config") is None):
             raise ValueError("Resume training configuration differs from checkpoint")
         if state.get("sampler"):
             sampler = EpisodeSampler(**state["sampler"])
@@ -288,7 +334,7 @@ def train(cfg, log_metrics=None):
             saved[step] = str(path)
         return saved[step]
 
-    def episode_losses(features, times, sample):
+    def episode_losses(features, times, sample, diagnostics):
         valid = sample["valid"].to(target)
         targets = (sample["targets"].to(target) - center) / scale
         with torch.autocast("cuda", dtype=torch.bfloat16) if target.type == "cuda" else nullcontext():
@@ -296,18 +342,20 @@ def train(cfg, log_metrics=None):
             losses = chunk_masked_loss(predicted, targets, valid)
         if not torch.isfinite(losses).all():
             raise RuntimeError("Nonfinite policy loss")
+        diagnostics.update(predicted, targets, valid)
         return losses
 
     def validate():
         nonlocal last_validation, best_loss
         model.eval()
         sums, chunks, timesteps = {}, {}, 0
+        diagnostics = LossAccumulator(scale)
         with torch.no_grad():
             paths = [r["path"] for r in validation]
             for index, (features, times, sample) in enumerate(feature_batches(extractor, paths, len(paths), source, target, cfg.overlap)):
                 if sample["identity"] != validation[index]["identity"]:
                     raise ValueError("Cache identity changed during validation")
-                losses = episode_losses(features, times, sample)
+                losses = episode_losses(features, times, sample, diagnostics)
                 suite = suite_name(sample["metadata"])
                 sums[suite] = sums.get(suite, 0.0) + losses.sum().item()
                 chunks[suite] = chunks.get(suite, 0) + len(losses)
@@ -318,6 +366,7 @@ def train(cfg, log_metrics=None):
         loss = sum(sums.values()) / sum(chunks.values())
         metrics = {"validation/loss": loss, "validation/episodes": len(validation),
                    "validation/chunks": sum(chunks.values()), "validation/valid_timesteps": timesteps}
+        metrics.update(diagnostics.finish("validation"))
         for suite in sums:
             metrics[f"validation/{suite}/loss"] = sums[suite] / chunks[suite]
             metrics[f"validation/{suite}/chunks"] = chunks[suite]
@@ -348,10 +397,11 @@ def train(cfg, log_metrics=None):
                          for offset, path in enumerate(paths)]
             optimizer.zero_grad(set_to_none=True)
             loss_sum, chunks, timesteps, suites = 0.0, 0, 0, {}
+            diagnostics = LossAccumulator(scale)
             for index, (features, times, sample) in zip(indices, feature_batches(extractor, paths, len(paths), source, target, cfg.overlap)):
                 if sample["identity"] != training[index]["identity"]:
                     raise ValueError("Cache identity changed during training")
-                losses = episode_losses(features, times, sample)
+                losses = episode_losses(features, times, sample, diagnostics)
                 if len(losses) != training[index]["chunks"]:
                     raise ValueError("Cache chunk count changed during training")
                 losses.sum().backward()
@@ -367,10 +417,14 @@ def train(cfg, log_metrics=None):
                 del features, losses, sample
             scale_gradients(model, chunks)
             norm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm, error_if_nonfinite=True)
+            applied_lr = learning_rate_for_update(cfg.lr, schedule, step + 1)
+            for group in optimizer.param_groups:
+                group["lr"] = applied_lr
             optimizer.step()
             step += 1
-            metrics = dict(loss=loss_sum / chunks, grad_norm=norm.item(), episodes=len(indices), chunks=chunks,
+            metrics = dict(lr=applied_lr, loss=loss_sum / chunks, grad_norm=norm.item(), episodes=len(indices), chunks=chunks,
                            valid_timesteps=timesteps, sampler_visited=sampler.visited, sampler_epoch=sampler.visited // sampler.size)
+            metrics.update(diagnostics.finish("train"))
             for suite, counts in suites.items():
                 counts["loss"] = counts.pop("loss_sum") / counts["chunks"]
                 metrics.update({f"train/{suite}/{key}": value for key, value in counts.items()})
